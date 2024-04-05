@@ -76,16 +76,12 @@ class CustomDataset(Dataset):
             translated_examples.append(self.vocab.get_idx_list(translated_example[: self.max_len]))
         return torch.Tensor(translated_examples)
 
-    def _pad_subregex_list(self, subregex_list):
-        subregex_list = subregex_list + ["<pad>"] * (self.max_len - len(subregex_list))
-        return subregex_list[: self.max_len]
-
     def __getitem__(self, idx):
         if self.is_test:
             return (
                 self._translate_examples(self.pos.iloc[idx]),
                 self._translate_examples(self.neg.iloc[idx]),
-                self._pad_subregex_list(self.subregex_list.iloc[idx]),
+                self.subregex_list.iloc[idx],
                 self._translate_examples(self.valid_pos.iloc[idx]),
                 self._translate_examples(self.valid_neg.iloc[idx]),
                 self._translate_examples(self.label.iloc[idx]),
@@ -94,7 +90,7 @@ class CustomDataset(Dataset):
             return (
                 self._translate_examples(self.pos.iloc[idx]),
                 self._translate_examples(self.label.iloc[idx]),
-                self._pad_subregex_list(self.subregex_list.iloc[idx]),
+                self.subregex_list.iloc[idx],
             )
 
 
