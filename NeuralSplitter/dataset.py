@@ -3,7 +3,6 @@ from ast import literal_eval
 
 import torch
 import pandas as pd
-import re2 as re
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -74,7 +73,7 @@ class CustomDataset(Dataset):
                 # If there is <pad> at the end, it would be divided to <, p, a, d, > not intended
                 translated_example = list(example) + ["<pad>"] * (self.max_len - len(example))
             translated_examples.append(self.vocab.get_idx_list(translated_example[: self.max_len]))
-        return torch.Tensor(translated_examples)
+        return torch.tensor(translated_examples)
 
     def __getitem__(self, idx):
         if self.is_test:

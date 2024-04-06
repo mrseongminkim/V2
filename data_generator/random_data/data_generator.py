@@ -35,8 +35,10 @@ parser.add_argument(
 )
 opt = parser.parse_args()
 
+config = configparser.ConfigParser()
+config.read("config.ini", encoding="utf-8")
+EXAMPLE_NUM = int(config["data"]["num_examples"]) * 2
 MAX_SEQUENCE_LENGTH = 10
-EXAMPLE_NUM = 20
 TRAIN_SEED = 10000
 TEST_SEED = 20000
 MAX_DEPTH = 4
@@ -143,9 +145,6 @@ def label_pos(tagged_regex, pos, subregex_list):
 
 
 def generate_and_store_data():
-    config = configparser.ConfigParser()
-    config.read("config.ini", encoding="utf-8")
-
     xeger = Xeger(limit=5)
 
     pathlib.Path(f"./data/random_data/size_{opt.alphabet_size}").mkdir(parents=True, exist_ok=True)

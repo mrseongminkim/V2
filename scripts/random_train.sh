@@ -1,6 +1,6 @@
 #!/bin/bash
 
-python train.py \
+python NeuralSplitter/train.py \
     --train_path ./data/random_data/train.csv \
     --valid_path ./data/random_data/valid.csv \
     --expt_dir saved_models/random \
