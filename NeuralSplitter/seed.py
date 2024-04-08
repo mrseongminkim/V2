@@ -6,7 +6,6 @@ import numpy as np
 
 
 def seed_all(seed: int = 3000):
-    print("Using Seed Number {}".format(seed))
     os.environ["PYTHONHASHSEED"] = str(seed)  # set PYTHONHASHSEED env var at fixed value
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)

@@ -21,7 +21,7 @@ def list_chunk(lst, n):
     return [lst[i : i + n] for i in range(0, len(lst), n)]
 
 
-class SupervisedTrainer(object):
+class SupervisedTrainer:
     """The SupervisedTrainer class helps in setting up a training framework in a
     supervised setting.
 
@@ -83,43 +83,33 @@ class SupervisedTrainer(object):
         self, input_variable, input_lengths, target_variable, regex, model, teacher_forcing_ratio
     ):
         loss = self.loss
-        # Forward propagation
-        # decoder_outputs = 10 * (batch_size * 10); List[Tensor] 구조다 왜?
-        # target_variable = (batch_size * num_examples) * max_seq_len
-        # other = {attention_score, sequence, length}
-        # other.sequence = 10 * (batch_size * 10); List[Tensor] 구조다 왜?
+        # decoder_outputs: max_len * (batch_size * num_examples) * vocab_size
+        # other.sequence = max_len * (batch * num_examples)
         decoder_outputs, decoder_hidden, other = model(
             input_variable,
             self.max_sequence_length,
-            input_variable,
             teacher_forcing_ratio=teacher_forcing_ratio,
         )
+
+        # target_variable: (batch_size * num_examples) * max_len
         target_variable = target_variable.contiguous().view(-1, self.max_sequence_length)
 
         # Get loss
         loss.reset()
 
         # acc of comparing to input strings & loss calculating
-        # 10 * (batch_size * 10)
         seqlist = other["sequence"]
         seqlist2 = [i.tolist() for i in seqlist]  # 각 Tensor를 list로 바꾼다.
 
-        # 10 * 1280을 1280 * 10으로 바꾼다. 즉, 마지막 10이 max_seq_len
+        # tmp = (batch_size * num_examples) * max_seq_len
         tmp = torch.Tensor(seqlist2).transpose(0, 1).squeeze(-1).tolist()
-        # tmp = batch_size * num_examples * max_seq_len
-        # 각 examples에서 각 심볼들의 등장 횟수를 카운트한다.
-        predict_dict = [dict(Counter(l)) for l in tmp]
 
         # acc of comparing to regex
         vocab = Vocabulary()
 
-        # 여기서 확실해지는 것이 decoder_outputs의 첫번째가 num_example이다.
         for step, step_output in enumerate(decoder_outputs):
-            batch_size = target_variable.size(0)
-            # all batch * n-th example * max_len
+            batch_size = target_variable.size(0)  # batch_size * num_examples
             target = target_variable[:, step].to(device="cuda")
-            # all batch * max_len
-            # 이거 이렇게 하는게 아니라 한 번에 해줘야 하는 거 아닌가?
             loss.eval_batch(step_output.contiguous().view(batch_size, -1), target)
 
             if step == 0:
@@ -199,7 +189,6 @@ class SupervisedTrainer(object):
             for inputs, outputs, regex in data:
                 step += 1
                 step_elapsed += 1
-
                 self.total_data_size += inputs.size(0)
 
                 loss = self._train_batch(
