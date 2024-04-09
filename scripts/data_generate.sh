@@ -1,5 +1,6 @@
 #!/bin/bash
 
+augment_size=10
 random_train_data_size=100
 random_valid_data_size=100
 
@@ -17,12 +18,17 @@ generate_random_data() {
     echo "Integration completed."
 }
 
-generate_random_data
+generate_practical_data() {
+    echo "Generation started."
+    python data_generator/practical_data/data_generator.py --augment $augment_size
+    echo "Generation completed, Integration started."
+    python data_generator/practical_data/data_integration.py
+    echo "Integration completed."
+    #python data_generator/practical_data/data_generator_test.py --augment 10
+}
 
-<<comment
 if [ $1 == "random" ]; then
     generate_random_data
 else
-    echo "I'm working on it. 🙄"
+    generate_practical_data
 fi
-comment
