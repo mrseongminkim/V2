@@ -3,11 +3,6 @@ import pathlib
 import argparse
 import os, sys
 
-sys.path.append(
-    os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "submodels", "SoftConciseNormalForm")
-    )
-)
 import configparser
 import re2 as re
 import random
@@ -54,6 +49,7 @@ def make_pos(regex, xeger):
     pos = list(filter(None, list(pos)))
 
     if len(pos) != EXAMPLE_NUM:
+        #operator 없는 것들이 있어서 충분히 가능하다.
         raise PredictableException("can not make EXAMPLE_NUM of examples")
 
     return pos
@@ -177,21 +173,70 @@ def make_neg(regex, pos):
 
 
 def remove_anchor(regex):
+    # \x5c = \
+
+    # Negative lookbehind - Not supported
+    # \^: ^ literal
+    # [^: negation
+    # 위 두 가지를 제외하고 ^를 모두 지운다.
     regex = re.sub(r"(?<!\x5c|\[)\^", "", regex)
+
+    # Negative lookbehind - Not supported
+    # \$: $ literal
+    # literal $을 제외하고 모두 지운다.
     regex = re.sub(r"(?<!\x5c)\$", "", regex)
-    regex = re.sub(r"\x5cA|\x5cZ", "", regex)
+
+    # \A: at beginning of text
+    # \Z: at end of text
+    # \z: at end of text
+    # \a: beep sound 😀
+    # "\\Apdf\\z" 이런 경우에는 오류가 발생하지 않을까?
+    regex = re.sub(r"\x5cA|\x5cZ|\x5cz", "", regex)
 
     return regex
 
 
 def remove_redundant_quantifier(regex):
-    regex = re.sub("}\+", "}", regex)
+    # repetition 뒤에 +가 오는 경우를 제거
+    # ab{2,3}* 같은 경우가 있으니 }*도?
+    # "[Q\\u0100\\u0200]{1,3}?" 같은 경우도 있다.
+    # "\\(\\p{ASCII}*\\)"
 
+    #{n,m}?; prefer fewer
+    #{n,}?: prefer fewer
+    #{n}?: exactly n
+    #{n,m}+: possessive
+    #{n,}+: possessive
+    #{n}+: exactly n
+
+    #함부로 지울 수 없는 이유
+    #"\\p{XDigit}*"
+    #이 경우에 {}는 literal이다.
+    #그니까 앞에 {%d, } 이거 체크하는 것이 필요할 것 같다.
+    #regex = re.sub("}\+", "}", regex)
+    #print(regex)
     while True:
+        # subn -> (new_string, number_of_subs_made)
+        #print(re.match("(\[[^]]*\]|\\\.|\\.|\(.*?\))" + "((\+|\{\d+\,\d*\}|\{\d+\})\??|\*\?)", regex))
+        #print(re.fullmatch("(\[[^]]*\]|\\\.|\\.|\(.*?\))" + "((\+|\{\d+\,\d*\}|\{\d+\})\??|\*\?)", regex))
+        #이거 원본 뭐였지
+        #repretition이 있으면 그 대상(\1)을 *로 바꿔준다.
+
+
+
+        # Cover
+        # {n,m} with ?, +, *
+        # {n,} with ?, +, *
+        # {n} with ?, +, *
+        # + -> *; idk why
         regex, a = re.subn(
-            "(\[[^]]*\]|\\\.|\\.|\(.*?\))" + "((\+|\{\d+\,\d*\}|\{\d+\})\??|\*\?)", r"\1*", regex
+            "(\[[^]]*\]|\\\.|\\.|\(.*?\))" + "(\+|\{\d+(\,\d*)?\}[\?\*\+]*)", r"\1*", regex
         )
+        #print("aaaaaa:", regex)
+        #print(a)
+        #exit()
         regex, b = re.subn("(\[[^]]*\]|\\\.|\\.|\(.*?\))" + "(\?\?)", r"\1?", regex)
+        #print("bbbbbb:", regex)
         regex, c = re.subn(
             r"(\\x[0-9A-Fa-f][0-9A-Fa-f]|@)" + "((\+|\?|\{\d+\,\d*\}|\{\d+\})\??|\*\?)",
             r"\1*",
@@ -405,20 +450,19 @@ def replace_constant_string(regex):
 def main():
     config = configparser.ConfigParser()
     config.read("config.ini", encoding="utf-8")
+
     random.seed(int(config["seed"]["practical_data"]))
+
     xeger = Xeger(limit=5)
     xeger.seed(int(config["seed"]["practical_data"]))
 
     data_pathes = [
-        "submodels/automatark/regex/snort-clean.re",
-        "submodels/automatark/regex/regexlib-clean.re",
-        "submodels/practical_data/practical_regexes.json",
+        "practical_regex/snort-clean.re",
+        "practical_regex/regexlib-clean.re",
+        "practical_regex/practical_regexes.re"
     ]
 
-    train_data = []
-
-    for data_idx, data_path in enumerate(data_pathes):
-
+    for data_path in data_pathes:
         regex_file = open(data_path, "r")
         data_name = re.search("[^/]*?(?=\.r|\.j)", data_path).group()
         pathlib.Path("data/practical_data/org").mkdir(parents=True, exist_ok=True)
@@ -429,27 +473,38 @@ def main():
         regex_list = [x.strip() for x in regex_file.readlines()]
 
         error_idx = []
-        for idx, regex in enumerate(regex_list):
 
+        for idx, regex in enumerate(regex_list):
             if data_name == "regexlib-clean":
                 regex = re.sub(r"\\\\", "\x5c", regex)
-            if data_name == "practical_regexes":
+            elif data_name == "practical_regexes":
+                #양 끝이 "로 감싸져있기에 지워준다.
                 regex = regex[1:-1]
+                # \\\\ -> !
                 regex = re.sub(r"\\\\\\\\", "!", regex)
+                # \\ -> \
+                # \x5c = \
                 regex = re.sub(r"\\\\", "\x5c", regex)
+                # \x00 = NULL
                 regex = re.sub(r"\x00", "", regex)
-
             try:
+                regex = regex_list[9]
                 # preprocess
+                print("origin:", regex)
                 regex = remove_anchor(regex)
+                print("anchor:", regex)
                 regex = remove_redundant_quantifier(regex)
+                print("qunati:", regex)
+                #exit()
                 regex = preprocess_parenthesis_flag(regex)
-
+                print("parent:", regex)
                 regex = special_characterize(regex)
-
+                print("specia:", regex)
                 regex = get_captured_regex(regex)
-
+                print("captur:", regex)
                 regex, mapping_table = replace_constant_string(regex)
+                print("consta:", regex)
+                #exit()
 
                 if re.search(r"(?<!\x5c)\[[^\[\]]*[()][^\[\]]*\](?!\x5c)", regex) is not None:
                     raise PredictableException("overlapped backet")
@@ -479,10 +534,12 @@ def main():
                     res = res + str(regex)
 
                     save_file.write(res + "\n")
+                exit()
 
             except Exception as e:
                 # if not isinstance(e, PredictableException) and not isinstance(e, re.error):
                 error_idx.append(idx)
+                exit()
                 continue
 
             if idx % 1000 == 0:
@@ -490,7 +547,6 @@ def main():
 
         print("error count :", len(error_idx))
         print("total len:", len(regex_list))
-
 
 if __name__ == "__main__":
     main()
