@@ -243,6 +243,8 @@ if not opt.resume:
     s2smodel = Seq2seq(encoder, decoder)
     if torch.cuda.is_available():
         s2smodel.cuda()
+    # All the functions in this module are intended to be used to initialize neural network parameters,
+    # so they all run in torch.no_grad() mode and will not be taken into account by autograd.
     for param in s2smodel.parameters():
         param.data.uniform_(-0.1, 0.1)
 

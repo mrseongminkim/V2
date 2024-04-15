@@ -229,9 +229,9 @@ class SupervisedTrainer:
             self.total_data_size * 10: 각 레겍스마다 10개의 example이 있으니까
             acc_seqT: example이 맞은 비율
             """
-            accuracyT = self.match / self.total
-            acc_seqT = self.match_seqnum / (self.total_data_size * 10)
-            acc_setT = self.match_setnum / self.total_data_size
+            accuracyT = self.match / self.total  # token wise
+            acc_seqT = self.match_seqnum / (self.total_data_size * 10)  # example wise
+            acc_setT = self.match_setnum / self.total_data_size  # regex wise
             train_log = (
                 "Train %s: %.4f, Accuracy: %.4f, Accuracy of seq: %.4f, Accuracy of set: %.4f"
                 % (
@@ -250,6 +250,8 @@ class SupervisedTrainer:
                     "Dev %s: %.4f, Accuracy: %.4f, Accuracy of seq: %.4f, Accuracy of set: %.4f"
                     % (self.loss.name, dev_loss, accuracy, acc_seq, acc_set)
                 )
+                # set accuracy 기준으로 early stopping이 작동한다.
+                # 왜?
                 early_stopping(
                     acc_set,
                     model,
@@ -260,7 +262,12 @@ class SupervisedTrainer:
                     self.output_vocab,
                     self.expt_dir,
                 )
+                # loss 기준으로 optimizer를 update한다.
                 self.optimizer.update(dev_loss, epoch)
+                # 원래는 acc_set이 높은 것을 저장했네요.
+                # 지금은 그냥 한 epoch 마다 저장한다.
+                # 어쨌든 valid의 accuracy를 기준으로 저장한다.
+
                 # if acc_set > best_acc:
                 #     log.info('acc_set increased >> best_accuracy{}, current_accuracy{}'.format(accuracy, best_acc))
 

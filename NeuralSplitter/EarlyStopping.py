@@ -1,10 +1,8 @@
-import torch
 import numpy as np
-
-from checkpoint import Checkpoint
 
 
 class EarlyStopping:
+    # 여기도 loss 기준인데 왜 acc_set으로 사용했을까?
     """Early stops the training if validation loss doesn't improve after a given patience."""
 
     def __init__(self, patience=7, verbose=False, delta=0, path="checkpoint.pt"):

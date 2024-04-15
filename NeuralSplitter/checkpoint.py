@@ -2,9 +2,10 @@ import os
 import time
 import shutil
 
-from models.seq2seq import *
 import torch
 import dill
+
+from models.seq2seq import *
 
 
 class Checkpoint:
