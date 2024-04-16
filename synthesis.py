@@ -17,7 +17,6 @@ import FAdo.reex as reex
 import re2 as re
 
 import NeuralSplitter.dataset as dataset
-import NeuralSplitter.optim as optim
 from NeuralSplitter.dataset import Vocabulary
 from NeuralSplitter.checkpoint import Checkpoint
 from NeuralSplitter.seed import seed_all
@@ -112,6 +111,7 @@ if "blue_fringe" in opt.sub_model:
 else:
     membership_type = lambda regex, string: bool(re.fullmatch(regex, string))
 
+# 기본적으로 sequential basic
 use_prefix_every = False
 if opt.synthesis_strategy == "sequential_basic":
     generate_regex_from_split = generate_split_regex_sequential
@@ -122,6 +122,17 @@ elif opt.synthesis_strategy == "sequential_prefix":
     use_prefix_every = True
 else:
     raise Exception("unknown synthesis strategy")
+
+# direct: w/o split
+# dc: divide and conquer
+# gt: ground truth
+direct_time_total, dc_time_total, gt_time_total = 0, 0, 0
+direct_correct_count, dc_correct_count, gt_correct_count = 0, 0, 0
+direct_win, dc_win = 0, 0
+
+manager = Manager()
+# 서브 프로세스에서 공유되는 dict
+return_dict = manager.dict()
 
 
 class TimeOutException(Exception):
@@ -134,7 +145,7 @@ def alarm_handler(signum, frame):
 
 def convert_indices_to_strings(indices):
     # tensor: examples * max_len
-    # strings may have examples less than indices'
+    # strings may have examples less than indices' due to strings of only <pad>
     strings = []
     vocab = Vocabulary()
     for i in range(indices.size(0)):
@@ -144,8 +155,8 @@ def convert_indices_to_strings(indices):
     return strings
 
 
-""" 보류
-def divide_and_conquer(model, pos, neg):
+def divide_and_conquer(model, pos, neg, pos_str, neg_str, idx):
+    global dc_correct_count, dc_time_total
     start_time = time.time()
     signal.signal(signal.SIGALRM, alarm_handler)
     signal.alarm(MAX_TIME_LIMIT)
@@ -177,7 +188,7 @@ def divide_and_conquer(model, pos, neg):
         dc_correct = False
     else:
         try:
-            dc_correct = is_solution(dc_answer, Examples(pos=pos_set, neg=neg_set), membership_type)
+            dc_correct = is_solution(dc_answer, Examples(pos=pos_str, neg=neg_str), membership_type)
         except:
             dc_correct = False
 
@@ -189,13 +200,152 @@ def divide_and_conquer(model, pos, neg):
     dc_time_total += dc_time_taken
 
     print(
-        f"{count}th Generated Regex (via DC): {dc_answer} ({dc_correct}), Time Taken: ",
+        f"{idx}th Generated Regex (via DC): {dc_answer} ({dc_correct}), Time Taken: ",
         dc_time_taken,
     )
-"""
+
+    return dc_correct, dc_time_taken, dc_answer, other
+
+
+def direct(other, pos, neg, pos_str, neg_str, idx):
+    global direct_correct_count, direct_time_total
+    start_time = time.time()
+    signal.signal(signal.SIGALRM, alarm_handler)
+    signal.alarm(MAX_TIME_LIMIT)
+    try:
+        # _, _, other = pos_split_model(pos, None, regex)
+        splited_pos, _ = split(pos, other["sequence"], no_split=True)  # batch, set, seq
+
+        # _, _, other = neg_split_model(neg)
+        splited_neg, _ = split(neg, other["sequence"], no_split=True)  # batch, set, seq
+
+        direct_answer, split_size = generate_split_regex_sequential(
+            splited_pos[0],
+            splited_neg[0],
+            False,
+            COUNT_LIMIT,
+            alphabet_size=opt.alphabet_size,
+            data_type=opt.data_type,
+            submodel=opt.sub_model,
+            return_dict=return_dict,
+            use_prefix_every=use_prefix_every,
+        )
+    except Exception as e:
+        print("time limit")
+        direct_answer = None
+    end_time = time.time()
+    signal.alarm(0)
+
+    if direct_answer is None:
+        direct_correct = False
+    else:
+        try:
+            direct_correct = is_solution(
+                direct_answer, Examples(pos=pos_str, neg=neg_str), membership_type
+            )
+        except:
+            direct_correct = False
+
+    if direct_correct:
+        direct_correct_count += 1
+        direct_time_taken = end_time - start_time
+    else:
+        direct_time_taken = MAX_TIME_LIMIT
+    direct_time_total += direct_time_taken
+
+    print(
+        f"{idx}th Generated Regex (direct): {direct_answer}, Time Taken: ",
+        direct_time_taken,
+    )
+    return direct_correct, direct_time_taken, direct_answer
+
+
+def ground_truth(other, pos, neg, pos_str, neg_str, tag, idx):
+    global gt_correct_count, gt_time_total
+    # via ground truth -----------------------------------------------------------------
+    start_time = time.time()
+    signal.signal(signal.SIGALRM, alarm_handler)
+    signal.alarm(MAX_TIME_LIMIT)
+
+    try:
+        gt_answer = None
+
+        splited_pos, sigma_lst = split(pos, np.array(tag, dtype="object").T)  # batch, set, seq
+
+        # _, _, other = neg_split_model(neg)
+        splited_neg, _ = split(neg, other["sequence"], no_split=True)  # batch, set, seq
+
+        gt_split_size = len(splited_pos[0][0])
+
+        gt_answer, split_size = generate_regex_from_split(
+            splited_pos[0],
+            splited_neg[0],
+            True,
+            COUNT_LIMIT,
+            alphabet_size=opt.alphabet_size,
+            data_type=opt.data_type,
+            sigma_lst=sigma_lst,
+            submodel=opt.sub_model,
+            return_dict=return_dict,
+            use_prefix_every=use_prefix_every,
+        )
+    except Exception as e:
+        print(e)
+        print("time limit")
+    end_time = time.time()
+    signal.alarm(0)
+
+    if gt_answer is None:
+        gt_correct = False
+    else:
+        try:
+            gt_correct = is_solution(gt_answer, Examples(pos=pos_str, neg=neg_str), membership_type)
+        except:
+            gt_correct = False
+
+    if gt_correct:
+        gt_correct_count += 1
+        gt_time_taken = end_time - start_time
+    else:
+        gt_time_taken = MAX_TIME_LIMIT
+    gt_time_total += gt_time_taken
+
+    print(
+        f"{idx}th Generated Regex (via GT): {gt_answer} ({gt_correct}), Time Taken: ",
+        gt_time_taken,
+    )
+    return gt_correct, gt_time_taken, gt_answer
+
+
+def synthesize_regex(model, pos, neg, pos_str, neg_str, tag, idx):
+    dc_correct, dc_time_taken, dc_answer, other = divide_and_conquer(
+        model, pos, neg, pos_str, neg_str, idx
+    )
+    direct_correct, direct_time_taken, direct_answer = None, None, None
+    if not opt.exclude_Direct:
+        direct_correct, direct_time_taken, direct_answer = direct(
+            other, pos, neg, pos_str, neg_str, idx
+        )
+    gt_correct, gt_time_taken, gt_answer = None, None, None
+    if not opt.exclude_GT:
+        gt_correct, gt_time_taken, gt_answer = ground_truth(
+            other, pos, neg, pos_str, neg_str, tag, idx
+        )
+    return (
+        dc_correct,
+        dc_time_taken,
+        dc_answer,
+        direct_correct,
+        direct_time_taken,
+        direct_answer,
+        gt_correct,
+        gt_time_taken,
+        gt_answer,
+    )
 
 
 def main():
+    global dc_win, direct_win
     data = dataset.get_loader(
         opt.data_path,
         batch_size=opt.batch_size,
@@ -207,16 +357,6 @@ def main():
     pos_checkpoint = Checkpoint.load(Checkpoint.get_latest_checkpoint(opt.checkpoint_pos))
     pos_split_model = pos_checkpoint.model
     pos_split_model.eval()
-
-    # direct: w/o split
-    # dc: divide and conquer
-    # gt: ground truth
-    direct_time_total, dc_time_total, gt_time_total = 0, 0, 0
-    direct_correct_count, dc_correct_count, gt_correct_count = 0, 0, 0
-    direct_win, dc_win = 0, 0
-
-    manager = Manager()
-    return_dict = manager.dict()
 
     for count, tuple in enumerate(data):
         pos, neg, subregex_list, valid_pos, valid_neg, label = tuple
@@ -287,170 +427,17 @@ def main():
         print("Target Regex:", regex_string)
         print("-" * 50)
 
-        # via divide and conquer ---------------------------
-        start_time = time.time()
-        signal.signal(signal.SIGALRM, alarm_handler)
-        signal.alarm(MAX_TIME_LIMIT)
-
-        try:
-            _, _, other = pos_split_model(pos, MAX_SEQUENCE_LENGTH)
-            splited_pos, sigma_lst = split(pos, other["sequence"])  # batch, set, seq
-
-            # 원래는 negative도 split 했나보다.
-            # _, _, other = neg_split_model(neg)
-            splited_neg, _ = split(neg, other["sequence"], no_split=True)  # batch, set, seq
-
-            dc_answer, split_size = generate_regex_from_split(
-                splited_pos[0],
-                splited_neg[0],
-                True,
-                COUNT_LIMIT,
-                alphabet_size=opt.alphabet_size,
-                data_type=opt.data_type,
-                sigma_lst=sigma_lst,
-                submodel=opt.sub_model,
-                return_dict=return_dict,
-                use_prefix_every=use_prefix_every,
-            )
-        except TimeOutException as e:
-            print(e)
-            print("time limit")
-            dc_answer = None
-        end_time = time.time()
-        signal.alarm(0)
-        if dc_answer is None:
-            dc_correct = False
-        else:
-            try:
-                dc_correct = is_solution(
-                    dc_answer, Examples(pos=pos_set, neg=neg_set), membership_type
-                )
-            except:
-                dc_correct = False
-
-        if dc_correct:
-            dc_correct_count += 1
-            dc_time_taken = end_time - start_time
-        else:
-            dc_time_taken = MAX_TIME_LIMIT
-        dc_time_total += dc_time_taken
-
-        print(
-            f"{count}th Generated Regex (via DC): {dc_answer} ({dc_correct}), Time Taken: ",
+        (
+            dc_correct,
             dc_time_taken,
-        )
-
-        # via direct -------------------------------------
-        if not opt.exclude_Direct:
-
-            start_time = time.time()
-            signal.signal(signal.SIGALRM, alarm_handler)
-            signal.alarm(MAX_TIME_LIMIT)
-
-            try:
-                # _, _, other = pos_split_model(pos, None, regex)
-                splited_pos, _ = split(pos, other["sequence"], no_split=True)  # batch, set, seq
-
-                # _, _, other = neg_split_model(neg)
-                splited_neg, _ = split(neg, other["sequence"], no_split=True)  # batch, set, seq
-
-                direct_answer, split_size = generate_split_regex_sequential(
-                    splited_pos[0],
-                    splited_neg[0],
-                    False,
-                    COUNT_LIMIT,
-                    alphabet_size=opt.alphabet_size,
-                    data_type=opt.data_type,
-                    submodel=opt.sub_model,
-                    return_dict=return_dict,
-                    use_prefix_every=use_prefix_every,
-                )
-            except Exception as e:
-                print("time limit")
-                direct_answer = None
-            end_time = time.time()
-            signal.alarm(0)
-
-            if direct_answer is None:
-                direct_correct = False
-            else:
-                try:
-                    direct_correct = is_solution(
-                        direct_answer, Examples(pos=pos_set, neg=neg_set), membership_type
-                    )
-                except:
-                    direct_correct = False
-
-            if direct_correct:
-                direct_correct_count += 1
-                direct_time_taken = end_time - start_time
-            else:
-                direct_time_taken = MAX_TIME_LIMIT
-            direct_time_total += direct_time_taken
-
-            print(
-                f"{count}th Generated Regex (direct): {direct_answer}, Time Taken: ",
-                direct_time_taken,
-            )
-
-        # via ground truth -----------------------------------------------------------------
-        if not opt.exclude_GT:
-            start_time = time.time()
-            signal.signal(signal.SIGALRM, alarm_handler)
-            signal.alarm(MAX_TIME_LIMIT)
-
-            try:
-                gt_answer = None
-
-                _, _, other = pos_split_model(pos, None, regex)
-                splited_pos, sigma_lst = split(
-                    pos, np.array(tag, dtype="object").T
-                )  # batch, set, seq
-
-                # _, _, other = neg_split_model(neg)
-                splited_neg, _ = split(neg, other["sequence"], no_split=True)  # batch, set, seq
-
-                gt_split_size = len(splited_pos[0][0])
-
-                gt_answer, split_size = generate_regex_from_split(
-                    splited_pos[0],
-                    splited_neg[0],
-                    True,
-                    COUNT_LIMIT,
-                    alphabet_size=opt.alphabet_size,
-                    data_type=opt.data_type,
-                    sigma_lst=sigma_lst,
-                    submodel=opt.sub_model,
-                    return_dict=return_dict,
-                    use_prefix_every=use_prefix_every,
-                )
-            except Exception as e:
-                print(e)
-                print("time limit")
-            end_time = time.time()
-            signal.alarm(0)
-
-            if gt_answer is None:
-                gt_correct = False
-            else:
-                try:
-                    gt_correct = is_solution(
-                        gt_answer, Examples(pos=pos_set, neg=neg_set), membership_type
-                    )
-                except:
-                    gt_correct = False
-
-            if gt_correct:
-                gt_correct_count += 1
-                gt_time_taken = end_time - start_time
-            else:
-                gt_time_taken = MAX_TIME_LIMIT
-            gt_time_total += gt_time_taken
-
-            print(
-                f"{count}th Generated Regex (via GT): {gt_answer} ({gt_correct}), Time Taken: ",
-                gt_time_taken,
-            )
+            dc_answer,
+            direct_correct,
+            direct_time_taken,
+            direct_answer,
+            gt_correct,
+            gt_time_taken,
+            gt_answer,
+        ) = synthesize_regex(pos_split_model, pos, neg, pos_set, neg_set, label, count)
 
         # win rate
         if not opt.exclude_Direct:
@@ -478,7 +465,7 @@ def main():
             print("-" * 50)
 
         log_data = dict()
-        log_data["Target_string"] = "".join(regex[0])
+        log_data["Target_string"] = regex_string
         log_data["pos"] = pos_set
         log_data["neg"] = neg_set
         log_data["pos_validation"] = valid_pos_set
