@@ -162,10 +162,18 @@ def divide_and_conquer(model, pos, neg, pos_str, neg_str, idx):
     signal.alarm(MAX_TIME_LIMIT)
     try:
         _, _, other = model(pos, MAX_SEQUENCE_LENGTH)
+        # other[sequence]: list안에 10개의 10 * 1 텐서가 있음
+        # 첫번째 원소부터 time_step이며 텐서의 index는 nth examples
+        # time_step * examples
+
+        # pos: batch * examples * max_len
         splited_pos, sigma_list = split(pos, other["sequence"])  # batch, set, seq
+
         # 원래는 negative도 split 했나보다.
         # _, _, other = neg_split_model(neg)
+        # 1 * 1 * 10
         splited_neg, _ = split(neg, other["sequence"], no_split=True)  # batch, set, seq
+
         dc_answer, split_size = generate_regex_from_split(
             splited_pos[0],
             splited_neg[0],
@@ -350,7 +358,7 @@ def main():
         opt.data_path,
         batch_size=opt.batch_size,
         is_test=True,
-        shuffle=True,
+        shuffle=False,
         max_len=MAX_SEQUENCE_LENGTH,
     )
 
@@ -359,6 +367,10 @@ def main():
     pos_split_model.eval()
 
     for count, tuple in enumerate(data):
+        # random 10 227 has sigma star to verify
+        # if count != 227:
+        #    continue
+        # valid_pos, valid_neg doesn't need vector form
         pos, neg, subregex_list, valid_pos, valid_neg, label = tuple
         # blue_fringe cannot handle special character '_' and '!'
         # 이러면 ASCII 확장이 안 될텐데
