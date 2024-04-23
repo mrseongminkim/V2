@@ -1,4 +1,4 @@
-from string import ascii_uppercase, ascii_lowercase
+from string import printable
 from ast import literal_eval
 
 import torch
@@ -8,22 +8,11 @@ from torch.utils.data import Dataset, DataLoader
 
 class Vocabulary:
     def __init__(self):
+        # 98 + 9 = 107
         self.itos = []
-        for i in range(10):
+        for i in printable[:-5]:
             self.itos.append(str(i))
-        for i in ascii_uppercase:
-            self.itos.append(i)
-        for i in ascii_lowercase:
-            self.itos.append(i)
-        self.itos += ["!", "_", "<pad>", "<unk>"]
-        # String     Integer
-        # 0-9        0-9
-        # A-Z        10-35
-        # a-z        36-61
-        # !          62
-        # _          63
-        # <pad>      64
-        # <unk>      65
+        self.itos += ["\x00", "\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "<pad>", "<unk>"]
         self.stoi = dict((x, i) for i, x in enumerate(self.itos))
 
     def __len__(self):
@@ -31,7 +20,7 @@ class Vocabulary:
 
     def get_idx(self, symbol):
         idx = self.stoi.get(symbol)
-        return self.stoi["!"] if idx is None else idx
+        return self.stoi["<unk>"] if idx is None else idx
 
     def get_idx_list(self, listed_example):
         return list(map(self.get_idx, listed_example))
