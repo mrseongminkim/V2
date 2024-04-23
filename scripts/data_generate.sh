@@ -20,10 +20,19 @@ generate_random_data() {
 
 generate_practical_data() {
     echo "Generation started."
-    python data_generator/practical_data/data_generator.py --augment $augment_size
+    for data_name in snort-clean regexlib-clean
+    do
+        python data_generator/practical_data/data_generator.py $data_name --augment $augment_size &
+    done
+    for i in {01..54}
+    do
+        data_name=$(printf "practical_regexes_%s" "$i")
+        python data_generator/practical_data/data_generator.py $data_name --augment $augment_size &
+    done
+    wait
     echo "Generation completed, Integration started."
-    python data_generator/practical_data/data_integration.py
-    echo "Integration completed."
+    #python data_generator/practical_data/data_integration.py
+    #echo "Integration completed."
     #python data_generator/practical_data/data_generator_test.py --augment 10
 }
 

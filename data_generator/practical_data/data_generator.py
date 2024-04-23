@@ -2,6 +2,7 @@ from xeger import Xeger
 import pathlib
 import argparse
 import os, sys
+import csv
 
 import configparser
 import re2 as re
@@ -14,6 +15,7 @@ dequantifier5 = "\\\\d|\\\\D\\\\|\\\\w|\\\\W|\\\\s|\\\\S|(?<!\\\\)\."
 quantifier = "(\*|\+|\?|\{\d+\,\d*\}|\{\d+\})\??"
 
 parser = argparse.ArgumentParser()
+parser.add_argument("data_name")
 parser.add_argument(
     "--augment", default=10, dest="aug_ratio", type=int, action="store", help="augmentation number"
 )
@@ -35,6 +37,28 @@ class PredictableException(Exception):
     pass
 
 
+def get_longest_common_substring(strings):
+    def get_n_grams(string: str, n: int) -> set:
+        n_grams = set()
+        for i in range(0, len(string) - n + 1):
+            n_grams.add(string[i : i + n])
+        return n_grams
+
+    def get_all_grams(string: str) -> set:
+        all_grams = set()
+        for length in range(len(string) + 1):
+            n_grams = get_n_grams(string, length)
+            all_grams.update(n_grams)
+        return all_grams
+
+    strings_n_grams = set()
+    for string in strings:
+        all_grams = get_all_grams(string)
+        strings_n_grams.add(frozenset(all_grams))
+    intersection = frozenset.intersection(*strings_n_grams)
+    longest_common_substring = max(intersection, key=len)
+    return longest_common_substring
+
 def make_pos(regex, xeger):
     pos = []
 
@@ -52,8 +76,19 @@ def make_pos(regex, xeger):
         #operator 없는 것들이 있어서 충분히 가능하다.
         raise PredictableException("can not make EXAMPLE_NUM of examples")
 
-    return pos
-
+    substitutions = dict()
+    index = 0
+    while True:
+        lcs = get_longest_common_substring(pos)
+        if len(lcs) < 2:
+            break
+        substitution = chr(index)
+        substitutions[substitution] = lcs
+        for i in range(len(pos)):
+            pos[i] = pos[i].replace(lcs, substitution)
+        regex = regex.replace(lcs, substitution)
+        index += 1
+    return regex, pos, substitutions
 
 def make_label(regex, pos):
     # Tag preprocessing
@@ -71,6 +106,8 @@ def make_label(regex, pos):
         elif letter == ")":
             bracket -= 1
     regex = "".join(str_list)
+
+    #print("tagged regex:", regex)
 
     subregex_list = []
     bracket = 0
@@ -93,16 +130,9 @@ def make_label(regex, pos):
     # generate templetes
     templete = []
 
-    for example in pos:
+    for example in pos[:EXAMPLE_NUM // 2]:
         if example != "<pad>":
             str_list = []
-
-            example = re.sub("\x0b", "`", example)
-
-            xx = re.fullmatch(regex, example)
-            if xx is None:
-
-                example = re.sub("`", "\t", example)
 
             dic = re.fullmatch(regex, example).groupdict()
             label_num = 1
@@ -110,55 +140,42 @@ def make_label(regex, pos):
 
                 targetstring = dic["t" + str(i)]
                 targetregex = re.sub("\?P\<t\d*?\>", "", subregex_list[i - 1])
-
-                if re.fullmatch(r"(\.|\[.*(\\d|\\D|\\w|\\W|\\S).*\])\*", targetregex):
+                if re.fullmatch(r"\(*?(.|\\d|\\D|\\w|\\W|\\S)\)*?\*\)*", targetregex):
                     label = SIGMA_STAR
                 else:
                     if label_num < 10:
                         label = str(label_num)
                     else:
                         label = chr(55 + label_num)
-
                 label_num += 1
-
                 count = len(targetstring)
-
                 for _ in range(count):
                     str_list.append(label)
-
             templete.append("".join(str_list))
         else:
             templete.append("<pad>")
 
-    for idx, pp in enumerate(pos):
+    for idx, pp in enumerate(pos[:EXAMPLE_NUM // 2]):
         if len(pp) != len(templete[idx]):
             raise PredictableException("lable_length error")
-    return templete
+    return templete, subregex_list
 
-
-def make_neg(regex, pos):
+def make_neg(regex, pos, substitutions):
     neg = []
-    symbol_list = []
-
+    symbol_list = set()
     for i in pos:
-        symbol_candidates = re.findall("(?!\x0b|\\\\|\\|').", i)
-        for symbol in symbol_candidates:
-            if symbol not in symbol_list:
-                symbol_list.append(symbol)
+        symbol_list.update(set(i))
+    symbol_list.difference_update(set(substitutions.keys()))
+    symbol_list = list(symbol_list)
 
     for i in range(0, 1000):
         # select random pos
         example = pos[random.randrange(0, len(pos))]
-
         count = max(int(len(example) / 5), 2)
-        for j in range(count):
+        for _ in range(count):
             point = random.randrange(0, len(example))
-            if example[point] != "'" and example[point] != r"\\":
-                example = (
-                    example[:point]
-                    + symbol_list[random.randrange(0, len(symbol_list))]
-                    + example[point + 1 :]
-                )
+            if example[point] not in ('\x00', '\x01', '\x02', '\x03', '\x04', '\x05', '\x06'):
+                example = example[:point] + symbol_list[random.randrange(0, len(symbol_list))] + example[point + 1:]
 
         if re.fullmatch(regex, example) is None and example not in neg:
             neg.append(example)
@@ -170,7 +187,6 @@ def make_neg(regex, pos):
         raise PredictableException("can not make EXAMPLE_NUM of examples")
 
     return neg
-
 
 def remove_anchor(regex):
     # \x5c = \
@@ -194,7 +210,6 @@ def remove_anchor(regex):
     regex = re.sub(r"\x5cA|\x5cZ|\x5cz", "", regex)
 
     return regex
-
 
 def remove_redundant_quantifier(regex):
     # repetition 뒤에 +가 오는 경우를 제거
@@ -250,7 +265,6 @@ def remove_redundant_quantifier(regex):
 
     return regex
 
-
 def preprocess_parenthesis_flag(regex):
     # unicode
     if re.search(r"\x5cu", regex) is not None:
@@ -285,7 +299,6 @@ def preprocess_parenthesis_flag(regex):
 
     return regex
 
-
 def preprocess_replace(regex):
     # control_ascii
     regex = re.sub(r"\\x([\d][0-9A-Fa-f])", r"!", regex)
@@ -306,7 +319,6 @@ def preprocess_replace(regex):
 
     return regex
 
-
 def get_captured_regex(regex):
     matchObj_iter = re.finditer(
         dequantifier
@@ -321,7 +333,7 @@ def get_captured_regex(regex):
         regex,
     )
 
-    split_point = [0]
+    #split_point = [0]
     indicate = 1
 
     regex = "(" + regex
@@ -335,14 +347,13 @@ def get_captured_regex(regex):
         indicate += 1
         regex = regex[: end + indicate] + "(" + regex[end + indicate :]
         indicate += 1
-        split_point.append(start)
-        split_point.append(end)
+        #split_point.append(start)
+        #split_point.append(end)
     regex = regex + ")"
 
     regex = re.sub("\(\)", "", regex)
 
     return regex
-
 
 def special_characterize(regex):
     regex = re.sub("(\\\\)?(\@|\#|\~|\`|\%|\&|\<|\>|\,|\=|'|\"| |\:|\;)", "!", regex)
@@ -352,7 +363,6 @@ def special_characterize(regex):
     regex = re.sub(r"\x5cr|\x5cn|\x5ct", "!", regex)
     regex = re.sub("\\\\x..", "!", regex)
     return regex
-
 
 def replace_constant_string(regex):
     mapping_table = {}
@@ -446,6 +456,13 @@ def replace_constant_string(regex):
 
     return regex, mapping_table
 
+def replace_hex(match):
+    hex_value = match.group(1)
+    char = chr(int(hex_value, 16))
+    # handle special characters except \; python will automatically convert \ to \\
+    if char in ('.', '+', '*', '?', '^', '$', '(', ')', '[', ']', '{', '}', '|'):
+        char = '\\' + char
+    return char
 
 def main():
     config = configparser.ConfigParser()
@@ -456,97 +473,174 @@ def main():
     xeger = Xeger(limit=5)
     xeger.seed(int(config["seed"]["practical_data"]))
 
+    data_name = opt.data_name
+
+    '''
     data_pathes = [
         "practical_regex/snort-clean.re",
         "practical_regex/regexlib-clean.re",
         "practical_regex/practical_regexes.re"
     ]
+    '''
+    regex_file = open(f"practical_regex/{data_name}.re", "r")
+    #data_name = re.search("[^/]*?(?=\.r|\.j)", data_path).group()
+    pathlib.Path("data/practical_data/org").mkdir(parents=True, exist_ok=True)
+    save_file = open("data/practical_data/org/" + data_name + ".csv", "w")
+    writer = csv.writer(save_file)
+    #print("Preprocessing " + data_name + "...")
+    regex_list = [x.strip() for x in regex_file.readlines()]
+    error_idx = []
+    for idx, regex in enumerate(regex_list):
+        if data_name == "regexlib-clean":
+            pass
+            #regex = re.sub(r"\\\\", "\x5c", regex)
+        elif data_name[:-3] == "practical_regexes":
+            #양 끝이 "로 감싸져있기에 지워준다.
+            regex = regex[1:-1]
+            pass
+            # \\\\ -> !
+            #regex = re.sub(r"\\\\\\\\", "!", regex)
+            # \\ -> \
+            # \x5c = \
+            #regex = re.sub(r"\\\\", "\x5c", regex)
+            # \x00 = NULL
+            #regex = re.sub(r"\x00", "", regex)
+        elif data_name == "snort-clean":
+            regex = regex[1:regex.rfind("/")]
+        try:
+            # If repl is a function, it is called for every non-overlapping occurrence of pattern.
+            # The function takes a single Match argument, and returns the replacement string.
+            #regex = "\\n"
+            regex = re.sub(r'\\x([0-9A-Fa-f]{2})', replace_hex, regex)
 
-    for data_path in data_pathes:
-        regex_file = open(data_path, "r")
-        data_name = re.search("[^/]*?(?=\.r|\.j)", data_path).group()
-        pathlib.Path("data/practical_data/org").mkdir(parents=True, exist_ok=True)
-        save_file = open("data/practical_data/org/" + data_name + ".csv", "w")
+            #eliminate mod modifier
+            regex = re.sub(r'(\?.+?)', "", regex)
 
-        print("Preprocessing " + data_name + "...")
+            import string
+            printable = string.printable[:-5]
 
-        regex_list = [x.strip() for x in regex_file.readlines()]
+            #backreferences
+            if re.search(r'\\\d', regex) is not None:
+                raise PredictableException("back reference")
+            if re.search(r'\\g{', regex) is not None:
+                raise PredictableException("back reference")
+            if re.search(r'\\k', regex) is not None:
+                raise PredictableException("back reference")
+            if re.search(r'\(\?P=', regex) is not None:
+                raise PredictableException("back reference")
 
-        error_idx = []
+            if not all(c in printable for c in regex):
+                #print("there is character that can't be printed")
+                raise PredictableException("not printable")
 
-        for idx, regex in enumerate(regex_list):
-            if data_name == "regexlib-clean":
-                regex = re.sub(r"\\\\", "\x5c", regex)
-            elif data_name == "practical_regexes":
-                #양 끝이 "로 감싸져있기에 지워준다.
-                regex = regex[1:-1]
-                # \\\\ -> !
-                regex = re.sub(r"\\\\\\\\", "!", regex)
-                # \\ -> \
-                # \x5c = \
-                regex = re.sub(r"\\\\", "\x5c", regex)
-                # \x00 = NULL
-                regex = re.sub(r"\x00", "", regex)
-            try:
-                regex = regex_list[9]
-                # preprocess
-                print("origin:", regex)
-                regex = remove_anchor(regex)
-                print("anchor:", regex)
-                regex = remove_redundant_quantifier(regex)
-                print("qunati:", regex)
-                #exit()
-                regex = preprocess_parenthesis_flag(regex)
-                print("parent:", regex)
-                regex = special_characterize(regex)
-                print("specia:", regex)
-                regex = get_captured_regex(regex)
-                print("captur:", regex)
-                regex, mapping_table = replace_constant_string(regex)
-                print("consta:", regex)
-                #exit()
+            # \a, \b, \f, \n, \r, \t, \v -> not printable
+            escape_sequences = re.finditer(r'(\\)(.)', regex)
+            for match in escape_sequences:
+                character = match.group(2)
+                if character in "abfnrtv":
+                    raise PredictableException("not printable")
 
-                if re.search(r"(?<!\x5c)\[[^\[\]]*[()][^\[\]]*\](?!\x5c)", regex) is not None:
-                    raise PredictableException("overlapped backet")
+            if re.search(r'(?<!\\)\[', regex) is not None:
+                #print("there is []")
+                raise PredictableException("character class")
+            
+            #look around assertion
+            if "(?=" in regex or "(?!" in regex or "(?<=" in regex or "(?<!" in regex:
+                raise PredictableException("look around assertion")
+            
+            #not ascii string
+            if not regex.isascii():
+                raise PredictableException("not ascii")
 
-            except Exception as e:
-                # if not isinstance(e, PredictableException) and not isinstance(e, re.error):
-                error_idx.append(idx)
-                continue
+            #print("original:", regex)
+            regex = remove_anchor(regex)
+            #print("anchor:", regex)
+            regex = remove_redundant_quantifier(regex)
+            #print("qunati:", regex)
+            regex = preprocess_parenthesis_flag(regex)
+            #print("parent:", regex)
+            #regex = special_characterize(regex)
 
-            try:
-                for _ in range(AUGMENTATION_RATIO):
+            regex = get_captured_regex(regex)
+            #exit()
+            #regex, mapping_table = replace_constant_string(regex)
+            #print("consta:", regex)
 
-                    # generate pos, neg, label
-                    pos = make_pos(regex, xeger)
-                    neg = make_neg(regex, pos)
-                    label = make_label(regex, pos)
+            if re.search(r"(?<!\x5c)\[[^\[\]]*[()][^\[\]]*\](?!\x5c)", regex) is not None:
+                raise PredictableException("overlapped backet")
 
-                    # replace unrecognized symbol
-                    pos = list(map(lambda y: preprocess_replace(repr(y)[1:-1]), pos))
-                    neg = list(map(lambda y: preprocess_replace(repr(y)[1:-1]), neg))
-
-                    total = pos + neg + label
-
-                    res = ""
-                    for ele in total:
-                        res = res + str(ele) + ", "
-                    res = res + str(regex)
-
-                    save_file.write(res + "\n")
-                exit()
-
-            except Exception as e:
-                # if not isinstance(e, PredictableException) and not isinstance(e, re.error):
-                error_idx.append(idx)
-                exit()
-                continue
-
-            if idx % 1000 == 0:
+        except Exception as e:
+            # if not isinstance(e, PredictableException) and not isinstance(e, re.error):
+            error_idx.append(idx)
+            if data_name == "practical_regexes_01":
                 print(idx)
+            continue
 
-        print("error count :", len(error_idx))
-        print("total len:", len(regex_list))
+        try:
+            for _ in range(AUGMENTATION_RATIO):
+                # generate pos, neg, label
+                regex, pos, substitutions = make_pos(regex, xeger)
+                neg = make_neg(regex, pos, substitutions)
+                label, subregex_list = make_label(regex, pos)
+
+                for i in range(len(subregex_list)):
+                    subregex_list[i] = re.sub("\?P\<t\d*?\>", "", subregex_list[i])
+
+                #\x00 to \x06 are not printable
+                #print(repr(regex))
+                #print(pos)
+                #print(neg)
+                #print(label)
+
+                # replace unrecognized symbol
+                #print(pos)
+                #pos = list(map(lambda y: preprocess_replace(repr(y)[1:-1]), pos))
+                #print(pos)
+                #print(neg)
+                #neg = list(map(lambda y: preprocess_replace(repr(y)[1:-1]), neg))
+                #print(neg)
+                #exit()
+
+                train_pos = pos[:EXAMPLE_NUM // 2]
+                valid_pos = pos[EXAMPLE_NUM // 2 : ]
+                train_neg = neg[:EXAMPLE_NUM // 2]
+                valid_neg = neg[EXAMPLE_NUM // 2: ]
+                labelled_pos = label
+
+                writer.writerow([train_pos, valid_pos, train_neg, valid_neg, labelled_pos, subregex_list])
+                '''
+                writer.writerow([f"{idx} regex"])
+                writer.writerow([train_pos])
+                writer.writerow([valid_pos])
+                writer.writerow([train_neg])
+                writer.writerow([valid_neg])
+                writer.writerow([labelled_pos])
+                writer.writerow([subregex_list])
+                '''
+
+                '''
+                total = pos + neg + label
+                res = ""
+                for ele in total:
+                    res = res + str(ele) + ", "
+                res = res + str(regex)
+
+                save_file.write(res + "\n")
+                '''
+
+        except Exception as e:
+            # if not isinstance(e, PredictableException) and not isinstance(e, re.error):
+            error_idx.append(idx)
+            if data_name == "practical_regexes_01":
+                print(idx)
+            continue
+        if data_name == "practical_regexes_01":
+            print(idx)
+        #if idx % 1000 == 0:
+        #    print(idx)
+    save_file.close()
+    print("error count :", len(error_idx))
+    print("total len:", len(regex_list))
 
 if __name__ == "__main__":
     main()
