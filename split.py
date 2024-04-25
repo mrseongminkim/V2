@@ -89,11 +89,7 @@ def split(strings, label, no_split=False):
                     "".join(
                         map(
                             lambda x: vocab.itos[x],
-                            [
-                                x
-                                for x in strings[batch_idx, set_idx]
-                                if x != vocab.stoi["<pad>"] and x != vocab.stoi["<unk>"]
-                            ],
+                            [x for x in strings[batch_idx, set_idx] if x != vocab.stoi["<pad>"]],
                         )
                     )
                 )
@@ -207,9 +203,12 @@ def generate_regex_with_split_ar(
     data_type,
     return_dict,
 ):
-    # 하나라면 이게 곧 레겍스이다.
+    # Singleton
     if len(sub_pos_set) == 1:
-        return_dict[sub_id] = sub_pos_set.pop()
+        character = sub_pos_set.pop()
+        if character and character in ".+*?^$()[]{}|\\":
+            character = "\\" + character
+        return_dict[sub_id] = character
         return
 
     # divide and conquer에서는 start_with_no_concat=split_model이 True이다.
@@ -249,9 +248,7 @@ def generate_regex_with_split_ar(
     return_dict[sub_id] = tmp
 
 
-def generate_regex_with_split_bf(
-    sub_id, sub_pos_set, sub_neg_set, split_model, count_limit, prefix, alphabet_size, return_dict
-):
+def generate_regex_with_split_bf(sub_id, sub_pos_set, sub_neg_set, split_model, count_limit, prefix, alphabet_size, return_dict):
 
     if len(sub_pos_set) == 1:
         return_dict[sub_id] = sub_pos_set.pop()
@@ -308,30 +305,24 @@ def generate_split_regex_sequential(
     return_dict=None,
     use_prefix_every=False,
 ):
-    # splited_pos: 10 * substring
-    # splited_neg: 10 * string
+    # splited_pos: examples * splites
+    # splited_neg: examples
     split_size = len(splited_pos[0])
-    print("Split Size: ", split_size)
 
     # 빈 example을 찾는다...?
     splited_pos = list(filter(lambda x: any(x), splited_pos))
     splited_neg = list(filter(lambda x: any(x), splited_neg))
 
     split_set = []
-
+    neg = []
+    for set_idx in range(len(splited_neg)):
+        neg.append(splited_neg[set_idx][0])
+    if not neg:
+        neg.append("")
     for sub_id in range(split_size):
         pos = []
-        neg = []
-
         for set_idx in range(len(splited_pos)):
             pos.append(splited_pos[set_idx][sub_id])
-        # 이거 밖으로 빼내야지 불필요한 연산 안 한다.
-        for set_idx in range(len(splited_neg)):
-            neg.append(splited_neg[set_idx][0])
-        if not neg:
-            neg.append("")
-        # pos: substring for each subregex
-        # neg: every neg examples
         split_set.append([set(pos), set(neg)])
 
     # synthesis one by one
@@ -346,8 +337,8 @@ def generate_split_regex_sequential(
             split_set[sub_id][1] -= split_set[sub_id][0]
             prefix = None
 
-        print("Splited Positive Strings:", split_set[sub_id][0])
-        print("Splited Negative Strings:", split_set[sub_id][1])
+        # print("Splited Positive Strings:", split_set[sub_id][0])
+        # print("Splited Negative Strings:", split_set[sub_id][1])
 
         if submodel == "alpharegex":
             generate_regex_with_split_ar(
@@ -375,9 +366,7 @@ def generate_split_regex_sequential(
                 return_dict,
             )
         elif submodel == "regex_generator":
-            generate_regex_with_split_rg(
-                sigma_lst, sub_id, split_set[sub_id][0], split_set[sub_id][1], return_dict
-            )
+            generate_regex_with_split_rg(sigma_lst, sub_id, split_set[sub_id][0], split_set[sub_id][1], return_dict)
         else:
             raise Exception("unknown baseline")
 

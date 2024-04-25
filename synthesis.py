@@ -5,7 +5,7 @@ import pickle
 import signal
 import configparser
 import pathlib
-from multiprocessing import Process, Manager
+from multiprocessing import Manager
 
 # https://github.com/pytorch/pytorch/issues/3678
 # This is why we only save state_dict
@@ -34,9 +34,7 @@ parser.add_argument(
     dest="data_path",
     help="Path to data",
 )
-parser.add_argument(
-    "--log_path", default="./log_data/practical", dest="log_path", help="Path to save log data"
-)
+parser.add_argument("--log_path", default="./log_data/practical", dest="log_path", help="Path to save log data")
 # batch size 기본 1이다. script에서도 안 건드린다.
 parser.add_argument("--batch_size", action="store", dest="batch_size", help="batch size", default=1)
 # best_accuracy 내에서 가장 최신 모델을 사용한다.
@@ -69,9 +67,7 @@ parser.add_argument(
     type=int,
     default=10,
 )
-parser.add_argument(
-    "--time_limit", action="store", dest="time_limit", help="time_limit", type=int, default=3
-)
+parser.add_argument("--time_limit", action="store", dest="time_limit", help="time_limit", type=int, default=3)
 parser.add_argument(
     "--synthesis_strategy",
     action="store",
@@ -79,9 +75,7 @@ parser.add_argument(
     default="sequential_basic",
     help="synthesis_strategy: sequential_prefix, parallel, sequential_basic",
 )
-parser.add_argument(
-    "--exclude_GT", action="store_true", dest="exclude_GT", help="decide to not infer GT split"
-)
+parser.add_argument("--exclude_GT", action="store_true", dest="exclude_GT", help="decide to not infer GT split")
 parser.add_argument(
     "--exclude_Direct",
     action="store_true",
@@ -162,17 +156,18 @@ def divide_and_conquer(model, pos, neg, pos_str, neg_str, idx):
     signal.alarm(MAX_TIME_LIMIT)
     try:
         _, _, other = model(pos, MAX_SEQUENCE_LENGTH)
-        # other[sequence]: list안에 10개의 10 * 1 텐서가 있음
+        # other[sequence]: list안에 max_len개의 example * 1 텐서가 있음
         # 첫번째 원소부터 time_step이며 텐서의 index는 nth examples
         # time_step * examples
 
         # pos: batch * examples * max_len
         splited_pos, sigma_list = split(pos, other["sequence"])  # batch, set, seq
-
-        # 원래는 negative도 split 했나보다.
-        # _, _, other = neg_split_model(neg)
-        # 1 * 1 * 10
+        # print(splited_pos)
+        # exit()
         splited_neg, _ = split(neg, other["sequence"], no_split=True)  # batch, set, seq
+        # splitted_pos: 각 string을 substring으로 나눈다. List of batch * examples * splits
+        # sigma_list: 각 substring이 sigma에서 나온것인지 표시한다. List of batch * examples * splits
+        # splitted_neg: 각 string. List of batch * examples
 
         dc_answer, split_size = generate_regex_from_split(
             splited_pos[0],
@@ -207,10 +202,10 @@ def divide_and_conquer(model, pos, neg, pos_str, neg_str, idx):
         dc_time_taken = MAX_TIME_LIMIT
     dc_time_total += dc_time_taken
 
-    print(
-        f"{idx}th Generated Regex (via DC): {dc_answer} ({dc_correct}), Time Taken: ",
-        dc_time_taken,
-    )
+    # print(
+    #    f"{idx}th Generated Regex (via DC): {dc_answer} ({dc_correct}), Time Taken: ",
+    #    dc_time_taken,
+    # )
 
     return dc_correct, dc_time_taken, dc_answer, other
 
@@ -248,9 +243,7 @@ def direct(other, pos, neg, pos_str, neg_str, idx):
         direct_correct = False
     else:
         try:
-            direct_correct = is_solution(
-                direct_answer, Examples(pos=pos_str, neg=neg_str), membership_type
-            )
+            direct_correct = is_solution(direct_answer, Examples(pos=pos_str, neg=neg_str), membership_type)
         except:
             direct_correct = False
 
@@ -261,10 +254,10 @@ def direct(other, pos, neg, pos_str, neg_str, idx):
         direct_time_taken = MAX_TIME_LIMIT
     direct_time_total += direct_time_taken
 
-    print(
-        f"{idx}th Generated Regex (direct): {direct_answer}, Time Taken: ",
-        direct_time_taken,
-    )
+    # print(
+    #    f"{idx}th Generated Regex (direct): {direct_answer}, Time Taken: ",
+    #    direct_time_taken,
+    # )
     return direct_correct, direct_time_taken, direct_answer
 
 
@@ -318,27 +311,23 @@ def ground_truth(other, pos, neg, pos_str, neg_str, tag, idx):
         gt_time_taken = MAX_TIME_LIMIT
     gt_time_total += gt_time_taken
 
-    print(
-        f"{idx}th Generated Regex (via GT): {gt_answer} ({gt_correct}), Time Taken: ",
-        gt_time_taken,
-    )
+    # print(
+    #    f"{idx}th Generated Regex (via GT): {gt_answer} ({gt_correct}), Time Taken: ",
+    #    gt_time_taken,
+    # )
     return gt_correct, gt_time_taken, gt_answer
 
 
+# done
 def synthesize_regex(model, pos, neg, pos_str, neg_str, tag, idx):
-    dc_correct, dc_time_taken, dc_answer, other = divide_and_conquer(
-        model, pos, neg, pos_str, neg_str, idx
-    )
     direct_correct, direct_time_taken, direct_answer = None, None, None
-    if not opt.exclude_Direct:
-        direct_correct, direct_time_taken, direct_answer = direct(
-            other, pos, neg, pos_str, neg_str, idx
-        )
     gt_correct, gt_time_taken, gt_answer = None, None, None
+
+    dc_correct, dc_time_taken, dc_answer, other = divide_and_conquer(model, pos, neg, pos_str, neg_str, idx)
+    if not opt.exclude_Direct:
+        direct_correct, direct_time_taken, direct_answer = direct(other, pos, neg, pos_str, neg_str, idx)
     if not opt.exclude_GT:
-        gt_correct, gt_time_taken, gt_answer = ground_truth(
-            other, pos, neg, pos_str, neg_str, tag, idx
-        )
+        gt_correct, gt_time_taken, gt_answer = ground_truth(other, pos, neg, pos_str, neg_str, tag, idx)
     return (
         dc_correct,
         dc_time_taken,
@@ -352,6 +341,7 @@ def synthesize_regex(model, pos, neg, pos_str, neg_str, tag, idx):
     )
 
 
+# done
 def main():
     global dc_win, direct_win
     data = dataset.get_loader(
@@ -367,14 +357,12 @@ def main():
     pos_split_model.eval()
 
     for count, tuple in enumerate(data):
-        # random 10 227 has sigma star to verify
-        # if count != 227:
-        #    continue
+        print(f"{count}/{len(data)}")
         # valid_pos, valid_neg doesn't need vector form
         pos, neg, subregex_list, valid_pos, valid_neg, label = tuple
         # blue_fringe cannot handle special character '_' and '!'
         # 이러면 ASCII 확장이 안 될텐데
-        # _나 !이면 z로 바꾼다.
+        # _나 !이면 z로 바꾼다. -> doesn't hold anymore
         if opt.sub_model == "blue_fringe" and opt.data_type == "practical":
             pos = list(
                 map(
@@ -433,11 +421,12 @@ def main():
         # regex[0]인것으로 보아서 batch size를 늘릴 계획은 없었다.
         # regex = (batch * num_subregex)
         regex_string = "".join([f"({subregex})" for subregex in subregex_list[0]])
-        print("-" * 50)
-        print("Positive Strings:", ", ".join(pos_set))
-        print("Negative Strings:", ", ".join(neg_set))
-        print("Target Regex:", regex_string)
-        print("-" * 50)
+
+        # print("-" * 50)
+        # print("Positive Strings:", ", ".join(pos_set))
+        # print("Negative Strings:", ", ".join(neg_set))
+        # print("Target Regex:", regex_string)
+        # print("-" * 50)
 
         (
             dc_correct,
@@ -464,12 +453,8 @@ def main():
                 direct_win += 1
 
         if not opt.exclude_Direct:
-            print(
-                f"Divide-and-conquer win rate over Direct: {dc_win / (dc_win + direct_win + 1e-9) * 100:.4f}%, Direct Total Time: {direct_time_total:.4f}, DC Total Time: {dc_time_total:.4f}"
-            )
-            print(
-                f"DC Success Ratio: {dc_correct_count / (count + 1) * 100:.4f}%, Direct Success Ratio: {direct_correct_count / (count + 1) * 100:.4f}%"
-            )
+            print(f"Divide-and-conquer win rate over Direct: {dc_win / (dc_win + direct_win + 1e-9) * 100:.4f}%, Direct Total Time: {direct_time_total:.4f}, DC Total Time: {dc_time_total:.4f}")
+            print(f"DC Success Ratio: {dc_correct_count / (count + 1) * 100:.4f}%, Direct Success Ratio: {direct_correct_count / (count + 1) * 100:.4f}%")
             print("-" * 50)
         else:
             print(f"DC Total Time: {dc_time_total:.4f}")
