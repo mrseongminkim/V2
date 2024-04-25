@@ -12,9 +12,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--path", dest="path", help="Path to experiment result directory.")
 parser.add_argument("--time_limit", dest="time_limit", type=int, default=3, help="time limit")
 parser.add_argument("--num", dest="num", type=int, default=1000, help="number of examples")
-parser.add_argument(
-    "--exclude_GT", action="store_true", dest="exclude_GT", help="decide to not infer GT split"
-)
+parser.add_argument("--exclude_GT", action="store_true", dest="exclude_GT", help="decide to not infer GT split")
 parser.add_argument(
     "--exclude_Direct",
     action="store_true",
@@ -54,12 +52,7 @@ def MCC_score(matrix):
     elif (matrix["Tn"] + matrix["Fp"]) == 0:
         return 1
     else:
-        return (matrix["Tp"] * matrix["Tn"] - matrix["Fp"] * matrix["Fn"]) / math.sqrt(
-            (matrix["Tp"] + matrix["Fp"])
-            * (matrix["Tn"] + matrix["Fn"])
-            * (matrix["Tp"] + matrix["Fn"])
-            * (matrix["Tn"] + matrix["Fp"])
-        )
+        return (matrix["Tp"] * matrix["Tn"] - matrix["Fp"] * matrix["Fn"]) / math.sqrt((matrix["Tp"] + matrix["Fp"]) * (matrix["Tn"] + matrix["Fn"]) * (matrix["Tp"] + matrix["Fn"]) * (matrix["Tn"] + matrix["Fp"]))
 
 
 """obsoleted
@@ -137,7 +130,6 @@ if __name__ == "__main__":
 
             # Direct success ratio ---------------------------
             if not opt.exclude_Direct:
-                # direct는 정답을 보장한다.
                 if log_data["Direct_time"] < time_limit and log_data["Direct_answer"]:
                     Direct_result = True
                     Direct_total_time += log_data["Direct_time"]
@@ -163,9 +155,7 @@ if __name__ == "__main__":
 
             # DC  ------------------------------
             # 예제에 대해서 생성이 되었는지 먼저 확인한다.
-            if log_data["DC_time"] < time_limit and membershipAll(
-                log_data["DC_answer"], log_data["pos"], log_data["neg"]
-            ):
+            if log_data["DC_time"] < time_limit and log_data["DC_answer"]:
                 DC_result = True
                 DC_total_time += log_data["DC_time"]
                 DC_success_count += 1
@@ -175,9 +165,7 @@ if __name__ == "__main__":
 
             # DC scoring
             if DC_result:
-                matrix = confusion_matrix(
-                    log_data["DC_answer"], log_data["pos_validation"], log_data["neg_validation"]
-                )
+                matrix = confusion_matrix(log_data["DC_answer"], log_data["pos_validation"], log_data["neg_validation"])
                 score = MCC_score(matrix)
             else:
                 score = -1
@@ -245,9 +233,7 @@ if __name__ == "__main__":
         str(GT_total_MCC / num),
     )
     print("direct / dc")
-    print(
-        "Win ratio:", str(Direct_win / (Direct_win + DC_win)), str(DC_win / (Direct_win + DC_win))
-    )
+    print("Win ratio:", str(Direct_win / (Direct_win + DC_win)), str(DC_win / (Direct_win + DC_win)))
     print("Run time avg:", str(Direct_total_time / num), str(DC_total_time / num))
     print(
         "Run time (only succ) avg:",

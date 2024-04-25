@@ -1,6 +1,6 @@
 #!/bin/bash
 
-augment_size=10
+augment_size=30
 random_train_data_size=400000
 random_valid_data_size=1000
 
@@ -31,8 +31,8 @@ generate_practical_data() {
     done
     wait
     echo "Generation completed, Integration started."
-    python data_generator/practical_data/data_integration.py
-    echo "Integration completed."
+    #python data_generator/practical_data/data_integration.py
+    #echo "Integration completed."
     #python data_generator/practical_data/data_generator_test.py --augment 10
 }
 

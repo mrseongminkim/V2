@@ -31,19 +31,24 @@ for data_idx, path in enumerate(data_list):
     random.shuffle(data)
 
     if data_idx == 0:
-        test_snort_file.writelines(data[:30])
-        valid.extend(data[30:60])
-        train.extend(data[60:])
+        test_snort_file.writelines(data[:50])
+        valid.extend(data[50:100])
+        train.extend(data[100:])
     elif data_idx == 1:
-        test_regexlib_file.writelines(data[:100])
-        valid.extend(data[100:200])
-        train.extend(data[200:])
+        test_regexlib_file.writelines(data[:200])
+        valid.extend(data[200:400])
+        train.extend(data[400:])
     else:
         practical.extend(data)
+print("Practical")
+print(len(practical))
+test_practical_file.writelines(practical[:3_000])
+practical = practical[3_000:]
+print("Practical train-valid")
+print(len(practical))
 
-test_practical_file.writelines(practical[:25_000])
-valid.extend(practical[25_000:50_000])
-train.extend(practical[50_000:])
+valid.extend(practical[int(len(practical) * 0.9) :])
+train.extend(practical[: int(len(practical) * 0.9)])
 
 random.shuffle(valid)
 random.shuffle(train)

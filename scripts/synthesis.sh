@@ -1,40 +1,47 @@
 #!/bin/bash
 
-# Practical - AlphaRegex
-python synthesis.py --data_path ./data/practical_data/integrated/test_snort.csv --log_path ./log_data/snort/sequential --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model alpharegex --time_limit 3
-#python synthesis.py --data_path ./data/practical_data/integrated/test_regexlib.csv --log_path ./log_data/regexlib/sequential --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model alpharegex --time_limit 3
-#python synthesis.py --data_path ./data/practical_data/integrated/test_practicalregex.csv --log_path ./log_data/practicalregex/sequential --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model alpharegex --time_limit 3
+# $1: [snort | lib | practical | 2 | 4 | 6 | 8 | 10]
+# $2: [ar | bf]
+alphabet_size=5
+time_limit=3
 
-# Practical - Blue Fringe
-#python synthesis.py --data_path ./data/practical_data/integrated/test_snort.csv --log_path ./log_data/snort/sequential --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model blue_fringe --time_limit 3
-#python synthesis.py --data_path ./data/practical_data/integrated/test_regexlib.csv --log_path ./log_data/regexlib/sequential --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model blue_fringe --time_limit 3
-#python synthesis.py --data_path ./data/practical_data/integrated/test_practicalregex.csv --log_path ./log_data/practicalregex/sequential --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model blue_fringe --time_limit 3
+if [ $1 == "snort" ]; then
+    data_path="./data/practical_data/integrated/test_snort.csv"
+    log_path="./log_data/snort/"
+    checkpoint_pos="./saved_models/practical/gru__256__2__2"
+    data_type="practical"
+elif [ $1 == "lib" ]; then
+    data_path="./data/practical_data/integrated/test_regexlib.csv"
+    log_path="./log_data/regexlib/"
+    checkpoint_pos="./saved_models/practical/gru__256__2__2"
+    data_type="practical"
+elif [ $1 == "practical" ]; then
+    data_path="./data/practical_data/integrated/test_practicalregex.csv"
+    log_path="./log_data/practicalregex/"
+    checkpoint_pos="./saved_models/practical/gru__256__2__2"
+    data_type="practical"
+fi
+case $1 in "2"|"4"|"6"|"8"|"10")
+    data_path="./data/random_data/size_${1}/test.csv"
+    log_path="./log_data/random/${1}/"
+    checkpoint_pos="./saved_models/random/gru__256__2__2"
+    data_type="random"
+    alphabet_size=$1
+esac
 
-# Random - AlphaRegex
-#python synthesis.py --data_path ./data/random_data/size_2/test.csv --log_path ./log_data/random/2/sequential --checkpoint_pos ./saved_models/random/gru__256__2__2 --data_type random --sub_model alpharegex --alphabet_size 2 --time_limit 3
-#python synthesis.py --data_path ./data/random_data/size_4/test.csv --log_path ./log_data/random/4/sequential --checkpoint_pos ./saved_models/random/gru__256__2__2 --data_type random --sub_model alpharegex --alphabet_size 4 --time_limit 3
-#python synthesis.py --data_path ./data/random_data/size_6/test.csv --log_path ./log_data/random/6/sequential --checkpoint_pos ./saved_models/random/gru__256__2__2 --data_type random --sub_model alpharegex --alphabet_size 6 --time_limit 3
-#python synthesis.py --data_path ./data/random_data/size_8/test.csv --log_path ./log_data/random/8/sequential --checkpoint_pos ./saved_models/random/gru__256__2__2 --data_type random --sub_model alpharegex --alphabet_size 8 --time_limit 3
-#python synthesis.py --data_path ./data/random_data/size_10/test.csv --log_path ./log_data/random/10/sequential --checkpoint_pos ./saved_models/random/gru__256__2__2 --data_type random --sub_model alpharegex --alphabet_size 10 --time_limit 3
+if [ $2 == "ar" ]; then
+    sub_model="alpharegex"
+elif [ $2 == "bf" ]; then
+    sub_model="blue_fringe"
+else
+    sub_model="error"
+fi
 
-
-
-
-
-
-
-
-
-
-
-
-
-# Obsoleted
-# Other synthesis methods
-# python synthesis.py --data_path ./data/practical_data/test/test_regexlib.csv --log_path ./log_data/regexlib/parallel --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model alpharegex --time_limit 3 --synthesis_strategy parallel --exclude_GT --exclude_Direct
-# python synthesis.py --data_path ./data/practical_data/test/test_snort.csv --log_path ./log_data/snort/parallel --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model alpharegex --time_limit 3 --synthesis_strategy parallel --exclude_GT --exclude_Direct
-# python synthesis.py --data_path ./data/practical_data/test/test_practicalregex.csv --log_path ./log_data/practicalregex/parallel --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model alpharegex --time_limit 3 --synthesis_strategy parallel --exclude_GT --exclude_Direct
-
-# python synthesis.py --data_path ./data/practical_data/test/test_regexlib.csv --log_path ./log_data/regexlib/prefix --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model alpharegex --time_limit 3 --synthesis_strategy sequential_prefix --exclude_GT --exclude_Direct
-# python synthesis.py --data_path ./data/practical_data/test/test_snort.csv --log_path ./log_data/snort/prefix --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model alpharegex --time_limit 3 --synthesis_strategy sequential_prefix --exclude_GT --exclude_Direct
-# python synthesis.py --data_path ./data/practical_data/test/test_practicalregex.csv --log_path ./log_data/practicalregex/prefix --checkpoint_pos ./saved_models/practical/gru__256__2__2 --data_type practical --sub_model alpharegex --time_limit 3 --synthesis_strategy sequential_prefix --exclude_GT --exclude_Direct
+python synthesis.py \
+    --data_path $data_path \
+    --log_path $log_path \
+    --checkpoint_pos $checkpoint_pos \
+    --data_type $data_type \
+    --sub_model $sub_model \
+    --time_limit $time_limit \
+    --alphabet_size $alphabet_size

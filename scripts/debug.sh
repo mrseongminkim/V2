@@ -1,25 +1,49 @@
 #!/bin/bash
 
-# random
-#python debug.py --path log_data/random/2/sequential/alpharegex --time_limit 3 --num 1000 
-#python debug.py --path log_data/random/4/sequential/alpharegex --time_limit 3 --num 1000 
-#python debug.py --path log_data/random/6/sequential/alpharegex --time_limit 3 --num 1000 
-#python debug.py --path log_data/random/8/sequential/alpharegex --time_limit 3 --num 1000 
-python debug.py --path log_data/random/10/sequential/alpharegex --time_limit 3 --num 1000 
+# $1: [snort | lib | practical | 2 | 4 | 6 | 8 | 10]
+# $2: [ar | bf]
+time_limit=3
+
+if [ $1 == "snort" ]; then
+    data_path="./data/practical_data/integrated/test_snort.csv"
+    log_path="./log_data/snort/"
+    checkpoint_pos="./saved_models/practical/gru__256__2__2"
+    data_type="practical"
+    num=50
+elif [ $1 == "lib" ]; then
+    data_path="./data/practical_data/integrated/test_regexlib.csv"
+    log_path="./log_data/regexlib/"
+    checkpoint_pos="./saved_models/practical/gru__256__2__2"
+    data_type="practical"
+    num=200
+elif [ $1 == "practical" ]; then
+    data_path="./data/practical_data/integrated/test_practicalregex.csv"
+    log_path="./log_data/practicalregex/"
+    checkpoint_pos="./saved_models/practical/gru__256__2__2"
+    data_type="practical"
+    num=3000
+fi
+case $1 in "2"|"4"|"6"|"8"|"10")
+    data_path="./data/random_data/size_${1}/test.csv"
+    log_path="./log_data/random/${1}/"
+    checkpoint_pos="./saved_models/random/gru__256__2__2"
+    data_type="random"
+    alphabet_size=$1
+esac
+
+if [ $2 == "ar" ]; then
+    log_path+="alpharegex"
+    sub_model="alpharegex"
+elif [ $2 == "bf" ]; then
+    log_path+="blue_fringe"
+    sub_model="blue_fringe"
+else
+    sub_model="error"
+fi
+
+python debug.py --num $num --path $log_path --time_limit $time_limit
 
 
-
-# # Table 1, 2
-
-# alpharegex
-#python debug.py --path log_data/regexlib/sequential/alpharegex --time_limit 3 --num 3000 
-#python debug.py --path log_data/snort/sequential/alpharegex --time_limit 3 --num 3000 
-#python debug.py --path log_data/practicalregex/sequential/alpharegex --time_limit 3 --num 3000 
-
-# blue_fringe
-#python debug.py --path log_data/regexlib/sequential/blue_fringe --time_limit 3 --num 3000
-#python debug.py --path log_data/snort/sequential/blue_fringe --time_limit 3 --num 3000
-#python debug.py --path log_data/practicalregex/sequential/blue_fringe --time_limit 3 --num 3000
 
 
 
