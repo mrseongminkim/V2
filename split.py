@@ -207,7 +207,7 @@ def generate_regex_with_split_ar(
     # Singleton
     if len(sub_pos_set) == 1:
         character = sub_pos_set.pop()
-        if character and character in ".+*?^$()[]{}|\\":
+        if character and character in "/.+*?^$()[]{}|\\":
             character = "\\" + character
         return_dict[sub_id] = character
         return
@@ -284,9 +284,11 @@ def generate_regex_with_split_bf(sub_id, sub_pos_set, sub_neg_set, split_model, 
 
 
 def generate_regex_with_split_rg(sigma_lst, sub_id, sub_pos_set, sub_neg_set, return_dict):
-
     if len(sub_pos_set) == 1:
-        return_dict[sub_id] = sub_pos_set.pop()
+        character = sub_pos_set.pop()
+        if character and character in "/.+*?^$()[]{}|\\":
+            character = "\\" + character
+        return_dict[sub_id] = character
         return
 
     # print(sub_pos_set, sub_neg_set)
@@ -300,7 +302,11 @@ def generate_regex_with_split_rg(sigma_lst, sub_id, sub_pos_set, sub_neg_set, re
 
     if sigma_lst is not None and any(list(map(lambda x: x[sub_id], sigma_lst))):
         tmp = get_sigma(Examples(pos=sub_pos_set, neg=sub_neg_set))
+        return_dict[sub_id] = tmp
+        return
     else:
+        sub_pos_set = set(filter(None, sub_pos_set))
+        sub_neg_set = set(filter(None, sub_neg_set))
         tmp = execute([Ex(list(sub_pos_set), list(sub_neg_set))])
 
     tmp = str(tmp).replace("++", "+").replace("?+", "+")

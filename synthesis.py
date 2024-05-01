@@ -25,7 +25,7 @@ from NeuralSplitter.models import *
 from submodels.SCNF.examples import Examples
 from submodels.SCNF.util import *
 
-from split import *
+from split import generate_split_regex_sequential, generate_split_regex_in_parallel, generate_split_regex_sequential, split
 
 from str2regexp import *
 

@@ -33,6 +33,8 @@ if [ $2 == "ar" ]; then
     sub_model="alpharegex"
 elif [ $2 == "bf" ]; then
     sub_model="blue_fringe"
+elif [ $2 == "rg" ]; then
+    sub_model="regex_generator"
 else
     sub_model="error"
 fi
