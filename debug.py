@@ -8,6 +8,8 @@ import FAdo.reex as reex
 from FAdo.fa import *
 from FAdo.cfg import *
 
+from str2regexp import *
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--path", dest="path", help="Path to experiment result directory.")
 parser.add_argument("--time_limit", dest="time_limit", type=int, default=3, help="time limit")
@@ -27,7 +29,7 @@ def membership(regex, string):
 
 
 def membership2(regex, string):
-    return reex.str2regexp(regex).evalWordP(string)
+    return str2regexp(regex).evalWordP(string)
 
 
 def confusion_matrix(answer, pos, neg):
@@ -128,6 +130,12 @@ if __name__ == "__main__":
         with open(path + "/" + file_name, "rb") as fr:
             log_data = pickle.load(fr)
 
+            """
+            if log_data["DC_answer"] and log_data["GT_answer"]:
+                if log_data["DC_answer"] != log_data["GT_answer"]:
+                    print(log_data["DC_answer"])
+                    print(log_data["GT_answer"])
+            """
             # Direct success ratio ---------------------------
             if not opt.exclude_Direct:
                 if log_data["Direct_time"] < time_limit and log_data["Direct_answer"]:
@@ -170,6 +178,8 @@ if __name__ == "__main__":
             else:
                 score = -1
 
+            dc_score = score
+
             DC_total_MCC += score
             if score == 1:
                 DC_full_success_count += 1
@@ -195,9 +205,19 @@ if __name__ == "__main__":
                 else:
                     score = -1
 
+                gt_score = score
+
                 GT_total_MCC += score
                 if score == 1:
                     GT_full_success_count += 1
+
+            """
+            if dc_score > gt_score:
+                print(log_data["DC_answer"])
+                print(log_data["GT_answer"])
+                print(log_data["pos_validation"])
+                print(log_data["neg_validation"])
+            """
 
             # Both; dc와 direct의 비교
             if not opt.exclude_Direct:

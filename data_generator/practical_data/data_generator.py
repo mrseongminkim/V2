@@ -490,7 +490,7 @@ def main():
         elif data_name[:-3] == "practical_regexes":
             # 양 끝이 "로 감싸져있기에 지워준다.
             regex = regex[1:-1]
-            # Xeger takes too long on this one, and probably not usable anyway
+            # Xeger takes too long on this ones, and probably not usable anyway
             if regex == "(?:a(?:b(?:c(?:d(?:e(?:f(?:g(?:h(?:i(?:j(?:k(?:l(?:FooBar){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}":
                 error_idx.append(idx)
                 continue
@@ -517,7 +517,7 @@ def main():
             regex = re.sub(r"\\x([0-9A-Fa-f]{2})", replace_hex, regex)
 
             # eliminate mod modifier
-            regex = re.sub(r"(\?.+?)", "", regex)
+            regex = re.sub(r"\(\?.+?\)", "", regex)
 
             import string
 
@@ -533,40 +533,49 @@ def main():
             if re.search(r"\(\?P=", regex) is not None:
                 raise PredictableException("back reference")
 
-            if not all(c in printable for c in regex):
-                # print("there is character that can't be printed")
-                raise PredictableException("not printable")
+            printable_regex = ""
+            for c in regex:
+                # will handle both not printable ones and not ascii ones
+                if c not in printable:
+                    c = random.choice(printable)
+                    if c in (".", "+", "*", "?", "^", "$", "(", ")", "[", "]", "{", "}", "|"):
+                        c = "\\" + c
+                printable_regex += c
+            regex = printable_regex
 
-            # \a, \b, \f, \n, \r, \t, \v -> not printable
-            escape_sequences = re.finditer(r"(\\)(.)", regex)
-            for match in escape_sequences:
-                character = match.group(2)
-                if character in "abfnrtv":
-                    raise PredictableException("not printable")
+            for not_printable in ("\a", "\b", "\f", "\n", "\r", "\t", "\v"):
+                c = random.choice(printable)
+                if c in (".", "+", "*", "?", "^", "$", "(", ")", "[", "]", "{", "}", "|"):
+                    c = "\\" + c
+                regex = regex.replace(not_printable, c)
 
-            if re.search(r"(?<!\\)\[", regex) is not None:
-                # print("there is []")
-                raise PredictableException("character class")
+            # negated character class
+            if re.search(r"(?<!\\)\[\^", regex) is not None:
+                raise PredictableException("negated character class")
+
+            character_classes = re.finditer(r"(?<!\\)(\[)(.*)(\])", regex)
+            for match in character_classes:
+                character_class: str = match.group(2)
+                alnum_set = "\w" in character_class
+                unescaped = character_class.replace("\\", "").replace("-", "")
+                sigma_set = not character_class.isalnum()
+                if sigma_set:
+                    over_approximation = "."
+                elif alnum_set or not unescaped.isdigit():
+                    over_approximation = "\w"
+                else:
+                    over_approximation = "\d"
+                regex = regex.replace(f"[{character_class}]", over_approximation)
 
             # look around assertion
             if "(?=" in regex or "(?!" in regex or "(?<=" in regex or "(?<!" in regex:
                 raise PredictableException("look around assertion")
 
-            # not ascii string
-            if not regex.isascii():
-                raise PredictableException("not ascii")
-
-            # print("original:", regex)
             regex = remove_anchor(regex)
-            # print("anchor:", regex)
             regex = remove_redundant_quantifier(regex)
-            # print("qunati:", regex)
             regex = preprocess_parenthesis_flag(regex)
-            # print("parent:", regex)
             # regex = special_characterize(regex)
-
             regex = get_captured_regex(regex)
-            # exit()
             # regex, mapping_table = replace_constant_string(regex)
 
             if re.search(r"(?<!\x5c)\[[^\[\]]*[()][^\[\]]*\](?!\x5c)", regex) is not None:

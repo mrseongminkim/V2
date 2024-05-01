@@ -27,6 +27,8 @@ from submodels.SCNF.util import *
 
 from split import *
 
+from str2regexp import *
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--data_path",
@@ -101,7 +103,7 @@ else:
     MAX_SEQUENCE_LENGTH = 15
 
 if "blue_fringe" in opt.sub_model:
-    membership_type = lambda regex, string: reex.str2regexp(regex).evalWordP(string)
+    membership_type = lambda regex, string: str2regexp(regex).evalWordP(string)
 else:
     membership_type = lambda regex, string: bool(re.fullmatch(regex, string))
 
@@ -221,6 +223,10 @@ def direct(other, pos, neg, pos_str, neg_str, idx):
 
         # _, _, other = neg_split_model(neg)
         splited_neg, _ = split(neg, other["sequence"], no_split=True)  # batch, set, seq
+
+        # print(splited_pos)
+        # print(splited_pos)
+        # exit()
 
         direct_answer, split_size = generate_split_regex_sequential(
             splited_pos[0],
@@ -360,59 +366,37 @@ def main():
         print(f"{count}/{len(data)}")
         # valid_pos, valid_neg doesn't need vector form
         pos, neg, subregex_list, valid_pos, valid_neg, label = tuple
-        # blue_fringe cannot handle special character '_' and '!'
-        # 이러면 ASCII 확장이 안 될텐데
-        # _나 !이면 z로 바꾼다. -> doesn't hold anymore
-        if opt.sub_model == "blue_fringe" and opt.data_type == "practical":
-            pos = list(
-                map(
-                    lambda x: list(
-                        map(
-                            lambda y: torch.tensor([61]) if y.item() == 62 or y.item() == 63 else y,
-                            x,
-                        )
-                    ),
-                    pos,
-                )
-            )
-            neg = list(
-                map(
-                    lambda x: list(
-                        map(
-                            lambda y: torch.tensor([61]) if y.item() == 62 or y.item() == 63 else y,
-                            x,
-                        )
-                    ),
-                    neg,
-                )
-            )
-            valid_pos = list(
-                map(
-                    lambda x: list(
-                        map(
-                            lambda y: torch.tensor([61]) if y.item() == 62 or y.item() == 63 else y,
-                            x,
-                        )
-                    ),
-                    valid_pos,
-                )
-            )
-            valid_neg = list(
-                map(
-                    lambda x: list(
-                        map(
-                            lambda y: torch.tensor([61]) if y.item() == 62 or y.item() == 63 else y,
-                            x,
-                        )
-                    ),
-                    valid_neg,
-                )
-            )
 
         pos_set = convert_indices_to_strings(pos[0])
         neg_set = convert_indices_to_strings(neg[0])
         valid_pos_set = convert_indices_to_strings(valid_pos[0])
         valid_neg_set = convert_indices_to_strings(valid_neg[0])
+
+        pos_set_origin = pos_set
+
+        if opt.sub_model == "blue_fringe" and opt.data_type == "practical":
+
+            def bf_escape(strings: list) -> list:
+                processed_string = []
+                for string in strings:
+                    temp = string
+                    for punct in p2s.keys():
+                        temp = temp.replace(punct, p2s[punct])
+                    temp = temp.replace("\x91unk\x93", p2s["<unk>"])
+                    if temp:
+                        processed_string.append(temp)
+                return processed_string
+
+            pos_set = bf_escape(pos_set)
+            neg_set = bf_escape(neg_set)
+            valid_pos_set = bf_escape(valid_pos_set)
+            valid_neg_set = bf_escape(valid_neg_set)
+
+        # print(pos_set_origin)
+        # print(pos_set)
+        # print(neg_set)
+        # print(valid_pos_set)
+        # print(valid_neg_set)
 
         # empty P set
         if not pos_set:

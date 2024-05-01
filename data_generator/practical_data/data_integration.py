@@ -31,13 +31,13 @@ for data_idx, path in enumerate(data_list):
     random.shuffle(data)
 
     if data_idx == 0:
-        test_snort_file.writelines(data[:50])
-        valid.extend(data[50:100])
-        train.extend(data[100:])
+        test_snort_file.writelines(data[:100])
+        valid.extend(data[100:200])
+        train.extend(data[200:])
     elif data_idx == 1:
-        test_regexlib_file.writelines(data[:200])
-        valid.extend(data[200:400])
-        train.extend(data[400:])
+        test_regexlib_file.writelines(data[:500])
+        valid.extend(data[500:1000])
+        train.extend(data[1000:])
     else:
         practical.extend(data)
 print("Practical")

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-augment_size=30
+augment_size=10
 random_train_data_size=400000
 random_valid_data_size=1000
 

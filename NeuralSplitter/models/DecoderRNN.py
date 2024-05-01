@@ -70,17 +70,13 @@ class DecoderRNN(BaseRNN):
         use_attention=False,
         attn_mode=False,
     ):
-        super().__init__(
-            vocab_size, max_len, hidden_size, input_dropout_p, dropout_p, n_layers, rnn_cell
-        )
+        super().__init__(vocab_size, max_len, hidden_size, input_dropout_p, dropout_p, n_layers, rnn_cell)
 
         self.bidirectional_encoder = bidirectional
         self.embed_size = 4
 
         # self.rnn = self.rnn_cell(hidden_size, hidden_size*2, n_layers, batch_first=True, dropout=dropout_p)
-        self.rnn = self.rnn_cell(
-            vocab_size, hidden_size, n_layers, batch_first=True, dropout=dropout_p
-        )
+        self.rnn = self.rnn_cell(vocab_size, hidden_size, n_layers, batch_first=True, dropout=dropout_p)
         self.output_size = vocab_size
         self.max_length = max_len
         self.use_attention = use_attention
@@ -136,14 +132,10 @@ class DecoderRNN(BaseRNN):
 
         attn = None
         if self.use_attention:
-            output, attn = self.attention(
-                output, encoder_outputs[0].view(batch_size * set_size, seq_len, -1)
-            )
+            output, attn = self.attention(output, encoder_outputs[0].view(batch_size * set_size, seq_len, -1))
 
         # 여기서 hidden_vector를 vocab size로 줄인다.
-        predicted_softmax = function(
-            self.out(output.contiguous().view(-1, self.hidden_size)), dim=1
-        ).view(batch_size * set_size, seq_len, self.output_size)
+        predicted_softmax = function(self.out(output.contiguous().view(-1, self.hidden_size)), dim=1).view(batch_size * set_size, seq_len, self.output_size)
 
         return predicted_softmax, hidden, attn
 
@@ -168,9 +160,7 @@ class DecoderRNN(BaseRNN):
 
         # encoder_outputs는 (src_output, set_output)
 
-        inputs, batch_size, max_length = self._validate_args(
-            inputs, encoder_hidden, encoder_outputs, function, teacher_forcing_ratio
-        )
+        inputs, batch_size, max_length = self._validate_args(inputs, encoder_hidden, encoder_outputs, function, teacher_forcing_ratio)
 
         # inputs -> (batch, examples, max_len)
         # encoder_hidden -> (num_layer x num_dir, batch, hidden)
@@ -178,7 +168,6 @@ class DecoderRNN(BaseRNN):
         self.rnn1_hidden = rnn1_hidden
         # decoder_hidden -> if bidirecional: (num_layer, batch, 2 x hidden) else : (num_layer x num_dir, batch, hidden)
 
-        # 이게 리스트인 것부터 맘에 안 들어
         decoder_outputs = []
         sequence_symbols = []
         # 여기서 max_len은 num_exam이니 10, [10] * batch_size; [10, 10, 10, ..., 10]
@@ -201,11 +190,9 @@ class DecoderRNN(BaseRNN):
         # decoder_input = inputs[:, 0].unsqueeze(1)  # (batch, 1) # (batch, set, len) -> (batch,1,len)
         # print(inputs.shape) # input variable 64,10,10
         # print(max_length)   # 10
-        # 임베딩 안 쓰잖아 ㅋㅋ
+        # 임베딩 안 씀
         # fucntion F.log_softmax
-        decoder_output, decoder_hidden, attn = self.forward_step(
-            inputs, embedding, decoder_hidden, encoder_outputs, function=function
-        )
+        decoder_output, decoder_hidden, attn = self.forward_step(inputs, embedding, decoder_hidden, encoder_outputs, function=function)
 
         # decoder_output: (batch * examples) * max_len * hidden
         # max_length만큼 돌린다.
@@ -266,9 +253,7 @@ class DecoderRNN(BaseRNN):
             h = torch.cat([h[0 : h.size(0) : 2], h[1 : h.size(0) : 2]], 2)
         return h
 
-    def _validate_args(
-        self, inputs, encoder_hidden, encoder_outputs, function, teacher_forcing_ratio
-    ):
+    def _validate_args(self, inputs, encoder_hidden, encoder_outputs, function, teacher_forcing_ratio):
         if self.use_attention:
             if encoder_outputs is None:
                 raise ValueError("Argument encoder_outputs cannot be None when attention is used.")
@@ -288,9 +273,7 @@ class DecoderRNN(BaseRNN):
         # set default input and max decoding length
         if inputs is None:
             if teacher_forcing_ratio > 0:
-                raise ValueError(
-                    "Teacher forcing has to be disabled (set 0) when no inputs is provided."
-                )
+                raise ValueError("Teacher forcing has to be disabled (set 0) when no inputs is provided.")
             inputs = torch.LongTensor([self.sos_id] * batch_size).view(batch_size, 1)
             if torch.cuda.is_available():
                 inputs = inputs.cuda()

@@ -14,6 +14,8 @@ from NeuralSplitter.dataset import Vocabulary
 from submodels.SCNF.examples import Examples
 from rpni import synthesis as rpni_synthesis
 
+from str2regexp import *
+
 
 class TimeOutException(Exception):
     pass
@@ -29,7 +31,6 @@ class Ex:
 
 
 def is_last_sigma(lst, split_size):
-    # 애초에 이거 leftmost라서 안 먹힘;;;
     try:
         # idx = len(lst) - 1: 마지막 원소
         # list(reversed(lst)).index(split_size) 마지막 subregex의 인덱스 left most가 반환됨
@@ -211,8 +212,6 @@ def generate_regex_with_split_ar(
         return_dict[sub_id] = character
         return
 
-    # divide and conquer에서는 start_with_no_concat=split_model이 True이다.
-
     if data_type == "random":
         # 각 example에서 sub_id에 해당하는 부분이 sigma인지 확인한다.
         # any인 이유는 이 부분을 사용하지 않고 넘어갔다면 False로 표현되기 때문이다.
@@ -249,9 +248,28 @@ def generate_regex_with_split_ar(
 
 
 def generate_regex_with_split_bf(sub_id, sub_pos_set, sub_neg_set, split_model, count_limit, prefix, alphabet_size, return_dict):
+    def bf_escape(strings: set) -> set:
+        processed_string = set()
+        for string in strings:
+            temp: str = string
+            for punct in p2s.keys():
+                temp = temp.replace(punct, p2s[punct])
+            temp = temp.replace("\x91unk\x93", p2s["<unk>"])
+            if temp:
+                processed_string.add(temp)
+        return processed_string
 
+    sub_pos_set = bf_escape(sub_pos_set)
+    sub_neg_set = bf_escape(sub_neg_set)
+
+    if not sub_pos_set:
+        return_dict[sub_id] = "@epsilon"
+        return
+
+    # Singleton
     if len(sub_pos_set) == 1:
-        return_dict[sub_id] = sub_pos_set.pop()
+        character = sub_pos_set.pop()
+        return_dict[sub_id] = character
         return
 
     tmp = rpni_synthesis(
@@ -262,7 +280,6 @@ def generate_regex_with_split_bf(sub_id, sub_pos_set, sub_neg_set, split_model, 
         suffix_for_neg_test=None,
         alphabet_size=alphabet_size,
     )
-
     return_dict[sub_id] = str(tmp)
 
 

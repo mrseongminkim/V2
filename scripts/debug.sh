@@ -9,13 +9,13 @@ if [ $1 == "snort" ]; then
     log_path="./log_data/snort/"
     checkpoint_pos="./saved_models/practical/gru__256__2__2"
     data_type="practical"
-    num=50
+    num=100
 elif [ $1 == "lib" ]; then
     data_path="./data/practical_data/integrated/test_regexlib.csv"
     log_path="./log_data/regexlib/"
     checkpoint_pos="./saved_models/practical/gru__256__2__2"
     data_type="practical"
-    num=200
+    num=500
 elif [ $1 == "practical" ]; then
     data_path="./data/practical_data/integrated/test_practicalregex.csv"
     log_path="./log_data/practicalregex/"
