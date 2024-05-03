@@ -165,6 +165,7 @@ class DecoderRNN(BaseRNN):
         # inputs -> (batch, examples, max_len)
         # encoder_hidden -> (num_layer x num_dir, batch, hidden)
         decoder_hidden, rnn1_hidden = self._init_state(encoder_hidden, rnn1_hidden)
+
         self.rnn1_hidden = rnn1_hidden
         # decoder_hidden -> if bidirecional: (num_layer, batch, 2 x hidden) else : (num_layer x num_dir, batch, hidden)
 
@@ -195,8 +196,9 @@ class DecoderRNN(BaseRNN):
         decoder_output, decoder_hidden, attn = self.forward_step(inputs, embedding, decoder_hidden, encoder_outputs, function=function)
 
         # decoder_output: (batch * examples) * max_len * hidden
-        # max_length만큼 돌린다.
+        # string의 max_length만큼 돌린다.
         for di in range(decoder_output.size(1)):
+            # 각 글자에 대해 진행한다.
             step_output = decoder_output[:, di, :]
             if attn is not None:
                 if self.attn_mode:
@@ -250,6 +252,7 @@ class DecoderRNN(BaseRNN):
         """
 
         if self.bidirectional_encoder:
+            # ::2 -> stride
             h = torch.cat([h[0 : h.size(0) : 2], h[1 : h.size(0) : 2]], 2)
         return h
 

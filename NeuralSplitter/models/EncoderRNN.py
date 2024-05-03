@@ -49,9 +49,7 @@ class EncoderRNN(BaseRNN):
         variable_lengths=False,
         vocab=None,
     ):
-        super().__init__(
-            vocab_size, max_len, hidden_size, input_dropout_p, dropout_p, n_layers, rnn_cell
-        )
+        super().__init__(vocab_size, max_len, hidden_size, input_dropout_p, dropout_p, n_layers, rnn_cell)
 
         self.vocab_size = vocab_size
         self.embed_size = 4
@@ -91,36 +89,26 @@ class EncoderRNN(BaseRNN):
         # 걍 masking 안 하는데?
         masking = get_mask(input_var)  # batch, set_size, seq_len
 
-        src_output, src_hidden = self.rnn1(
-            src_embedded
-        )  # (batch x set_size, seq_len, hidden), # (num_layer x num_dir, batch*set_size, hidden)
+        src_output, src_hidden = self.rnn1(src_embedded)  # (batch x set_size, seq_len, hidden), # (num_layer x num_dir, batch*set_size, hidden)
 
         # containing the final hidden state for the input sequence.
         # (if_batch_2_else_1 * num_layer) *(batch * set_size) * 256
         rnn1_hidden = src_hidden
 
         # 모든 time step에 대해서 정보를 가지고 있다.
-        src_output = src_output.view(
-            batch_size, set_size, seq_len, -1
-        )  # batch, set_size, seq_len, hidden)
+        src_output = src_output.view(batch_size, set_size, seq_len, -1)  # batch, set_size, seq_len, hidden)
 
         if type(self.rnn1) is nn.LSTM:
-            src_single_hidden = src_hidden[0].view(
-                self.n_layers, -1, batch_size * set_size, self.hidden_size
-            )  # num_layer(2), num_direction, batch x set_size, hidden
+            src_single_hidden = src_hidden[0].view(self.n_layers, -1, batch_size * set_size, self.hidden_size)  # num_layer(2), num_direction, batch x set_size, hidden
         else:
-            src_single_hidden = src_hidden.view(
-                self.n_layers, -1, batch_size * set_size, self.hidden_size
-            )  # num_layer(2), num_direction, batch x set_size, hidden
+            src_single_hidden = src_hidden.view(self.n_layers, -1, batch_size * set_size, self.hidden_size)  # num_layer(2), num_direction, batch x set_size, hidden
         # https://stackoverflow.com/questions/56677052/is-hidden-and-output-the-same-for-a-gru-unit-in-pytorch
 
         # use hidden state of final_layer
         set_embedded = src_single_hidden[-1, :, :, :]  # num_direction, batch x set_size, hidden
 
         if self.bidirectional:
-            set_embedded = torch.cat(
-                (set_embedded[0], set_embedded[1]), dim=-1
-            )  # batch x set_size, num_direction x hidden
+            set_embedded = torch.cat((set_embedded[0], set_embedded[1]), dim=-1)  # batch x set_size, num_direction x hidden
         else:
             set_embedded = set_embedded.squeeze(0)  # batch x set_size, hidden
 
@@ -128,9 +116,7 @@ class EncoderRNN(BaseRNN):
 
         # 여기서 셋 트랜스포머를 사용해야한다.
         # 모든 시점에서의 정보를 다 가지고 있다.
-        set_output, set_hidden = self.rnn2(
-            set_embedded
-        )  # (batch, set_size, hidden), # (num_layer*num_dir, batch, hidden) 2개 tuple 구성
+        set_output, set_hidden = self.rnn2(set_embedded)  # (batch, set_size, hidden), # (num_layer*num_dir, batch, hidden) 2개 tuple 구성
 
         if type(self.rnn2) is nn.LSTM:
             last_hidden = set_hidden[0]  # num_layer x num_dir, batch, hidden
@@ -142,4 +128,5 @@ class EncoderRNN(BaseRNN):
         outputs = (src_output, set_output)
 
         # hiddens: set, rnn1_hidden: seq
+
         return outputs, hiddens, masking, rnn1_hidden

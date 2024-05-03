@@ -1,8 +1,13 @@
 #!/bin/bash
 
+train="./data/practical_data/integrated/train.csv"
+valid="./data/practical_data/integrated/valid.csv"
+
+debug="./data/practical_data/integrated/test_regexlib.csv"
+
 python NeuralSplitter/train.py \
-    --train_path ./data/practical_data/integrated/train.csv \
-    --valid_path ./data/practical_data/integrated/valid.csv \
+    --train_path $train \
+    --valid_path $valid \
     --expt_dir saved_models/practical \
     --gru \
     --hidden_size 256 \
@@ -13,4 +18,3 @@ python NeuralSplitter/train.py \
     --dropout_de 0.4 \
     --weight_decay 0.000001 \
     --add_seed 152 \
-    --set_transformer

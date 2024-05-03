@@ -3,10 +3,13 @@ import pathlib
 import argparse
 import os, sys
 import csv
+import string
 
 import configparser
 import re2 as re
 import random
+
+printable = string.printable[:-5]
 
 dequantifier = "(\\\.|\\.|\\\\x..)"
 dequantifier2 = "(\(.*?\)|\[[^]]*\])"
@@ -64,7 +67,14 @@ def make_pos(regex, xeger):
     for i in range(200):
         example_candidate = xeger.xeger(regex)
         if len(example_candidate) < MAX_SEQUENCE_LENGTH and example_candidate not in pos:
-            pos.append(example_candidate)
+            example = ""
+            for i in range(len(example_candidate)):
+                if example_candidate[i] in printable:
+                    example += example_candidate[i]
+                else:
+                    c = random.choice(printable)
+                    example += c
+            pos.append(example)
         if len(pos) == EXAMPLE_NUM:
             break
 
@@ -74,6 +84,8 @@ def make_pos(regex, xeger):
     if len(pos) != EXAMPLE_NUM:
         # operator 없는 것들이 있어서 충분히 가능하다.
         raise PredictableException("can not make EXAMPLE_NUM of examples")
+
+    # print("pos:", pos)
 
     substitutions = dict()
     index = 0
@@ -85,8 +97,20 @@ def make_pos(regex, xeger):
         substitutions[substitution] = lcs
         for i in range(len(pos)):
             pos[i] = pos[i].replace(lcs, substitution)
-        regex = regex.replace(lcs, substitution)
+        # lcs 처리
+        # print("lcs:", repr(lcs))
+
+        escaped_lcs = ""
+        for i in lcs:
+            if i in (".", "+", "*", "?", "^", "$", "(", ")", "[", "]", "{", "}", "|", "/"):
+                i = "\\" + i
+            escaped_lcs += i
+        # print("escaped_lcs:", escaped_lcs)
+        regex = regex.replace(escaped_lcs, substitution)
+        # print("regex:", regex)
         index += 1
+    # print("regex:", repr(regex))
+    # print("pos:", pos)
     return regex, pos, substitutions
 
 
@@ -134,6 +158,10 @@ def make_label(regex, pos):
         if example != "<pad>":
             str_list = []
 
+            # print("final regex:", repr(regex))
+            # print("final_regex:", regex)
+            # print("example:", repr(example))
+
             dic = re.fullmatch(regex, example).groupdict()
             label_num = 1
             for i in range(1, len(dic) + 1):
@@ -178,8 +206,12 @@ def make_neg(regex, pos, substitutions):
             if example[point] not in ("\x00", "\x01", "\x02", "\x03", "\x04", "\x05", "\x06"):
                 example = example[:point] + symbol_list[random.randrange(0, len(symbol_list))] + example[point + 1 :]
 
+        # print("here")
+        # print("regex:", repr(regex))
+        # print("example:", repr(example))
         if re.fullmatch(regex, example) is None and example not in neg:
             neg.append(example)
+        # print("not here")
 
         if len(neg) == EXAMPLE_NUM:
             break
@@ -321,6 +353,7 @@ def preprocess_replace(regex):
 
 
 def get_captured_regex(regex):
+    # print("regex:", regex)
     matchObj_iter = re.finditer(
         dequantifier + quantifier + "|" + dequantifier2 + "(" + quantifier + ")?" + "|" + dequantifier5,
         regex,
@@ -346,6 +379,7 @@ def get_captured_regex(regex):
 
     regex = re.sub("\(\)", "", regex)
 
+    # print("regex-modified:", regex)
     return regex
 
 
@@ -454,6 +488,8 @@ def replace_hex(match):
 
 
 def main():
+    max_len = -1
+
     config = configparser.ConfigParser()
     config.read("config.ini", encoding="utf-8")
 
@@ -480,6 +516,9 @@ def main():
     regex_list = [x.strip() for x in regex_file.readlines()]
     error_idx = []
     for idx, regex in enumerate(regex_list):
+        # if idx != 87:
+        #    continue
+        # regex = regex_list[10]
         # idx = 9221
         # regex = regex_list[idx]
         # print(regex)
@@ -511,6 +550,7 @@ def main():
         elif data_name == "snort-clean":
             regex = regex[1 : regex.rfind("/")]
         try:
+            # print("original:", regex)
             # If repl is a function, it is called for every non-overlapping occurrence of pattern.
             # The function takes a single Match argument, and returns the replacement string.
             # regex = "\\n"
@@ -518,10 +558,6 @@ def main():
 
             # eliminate mod modifier
             regex = re.sub(r"\(\?.+?\)", "", regex)
-
-            import string
-
-            printable = string.printable[:-5]
 
             # backreferences
             if re.search(r"\\\d", regex) is not None:
@@ -538,14 +574,14 @@ def main():
                 # will handle both not printable ones and not ascii ones
                 if c not in printable:
                     c = random.choice(printable)
-                    if c in (".", "+", "*", "?", "^", "$", "(", ")", "[", "]", "{", "}", "|"):
+                    if c in (".", "+", "*", "?", "^", "$", "(", ")", "[", "]", "{", "}", "|", "/"):
                         c = "\\" + c
                 printable_regex += c
             regex = printable_regex
 
             for not_printable in ("\a", "\b", "\f", "\n", "\r", "\t", "\v"):
                 c = random.choice(printable)
-                if c in (".", "+", "*", "?", "^", "$", "(", ")", "[", "]", "{", "}", "|"):
+                if c in (".", "+", "*", "?", "^", "$", "(", ")", "[", "]", "{", "}", "|", "/"):
                     c = "\\" + c
                 regex = regex.replace(not_printable, c)
 
@@ -575,7 +611,26 @@ def main():
             regex = remove_redundant_quantifier(regex)
             regex = preprocess_parenthesis_flag(regex)
             # regex = special_characterize(regex)
+            # print("idx:", idx + 1)
             regex = get_captured_regex(regex)
+
+            # redundant escape
+            regex = re.sub(r"(?<!\\)/", r"\/", regex)
+            regex = re.sub(r"(\\)(&|=)", r"\2", regex)
+
+            # or without left
+            regex = re.sub(r"(\()(\|)", r"\1", regex)
+
+            # print("final regex:", regex)
+            # print("repre:", repr(regex))
+
+            # if idx == 75:
+            #    print("before:", repr(regex))
+            # if idx == 75:
+            #    print("after:", regex)
+            #    exit()
+            # print("final:", regex)
+            # exit()
             # regex, mapping_table = replace_constant_string(regex)
 
             if re.search(r"(?<!\x5c)\[[^\[\]]*[()][^\[\]]*\](?!\x5c)", regex) is not None:
@@ -591,9 +646,16 @@ def main():
         try:
             for _ in range(AUGMENTATION_RATIO):
                 # generate pos, neg, label
-                regex, pos, substitutions = make_pos(regex, xeger)
-                neg = make_neg(regex, pos, substitutions)
-                label, subregex_list = make_label(regex, pos)
+                symbolized_regex, pos, substitutions = make_pos(regex, xeger)
+
+                # print("before removal:", symbolized_regex)
+                # symbolized_regex = re.sub(r"(\\)(\x00|\x01|\x02|\x03|\x04|\x05|\x06)", r"\2", symbolized_regex)
+
+                # print("done pos")
+                neg = make_neg(symbolized_regex, pos, substitutions)
+                # print("done neg")
+                label, subregex_list = make_label(symbolized_regex, pos)
+                # print("done label")
 
                 for i in range(len(subregex_list)):
                     subregex_list[i] = re.sub("\?P\<t\d*?\>", "", subregex_list[i])
@@ -613,13 +675,30 @@ def main():
                 # print(neg)
                 # exit()
 
-                train_pos = pos[: EXAMPLE_NUM // 2]
-                valid_pos = pos[EXAMPLE_NUM // 2 :]
-                train_neg = neg[: EXAMPLE_NUM // 2]
-                valid_neg = neg[EXAMPLE_NUM // 2 :]
-                labelled_pos = label
+                def tokenize(sequences):
+                    if type(sequences) == str:
+                        return list(sequences)
+                    tokenized = []
+                    for sequence in sequences:
+                        tokenized.append(list(sequence))
+                    return tokenized
 
-                writer.writerow([train_pos, valid_pos, train_neg, valid_neg, labelled_pos, subregex_list])
+                train_pos = pos[: EXAMPLE_NUM // 2]  # list of string
+                valid_pos = pos[EXAMPLE_NUM // 2 :]  # list of string
+                train_neg = neg[: EXAMPLE_NUM // 2]  # list of string
+                valid_neg = neg[EXAMPLE_NUM // 2 :]  # list of string
+                labelled_pos = label  # list of string
+                symbolized_regex = symbolized_regex  # string
+
+                train_pos = tokenize(train_pos)
+                valid_pos = tokenize(valid_pos)
+                train_neg = tokenize(train_neg)
+                valid_neg = tokenize(valid_neg)
+                labelled_pos = tokenize(labelled_pos)
+                symbolized_regex = tokenize(symbolized_regex)
+
+                max_len = max(max_len, len(symbolized_regex))
+                writer.writerow([train_pos, valid_pos, train_neg, valid_neg, labelled_pos, symbolized_regex])
                 """
                 writer.writerow([f"{idx} regex"])
                 writer.writerow([train_pos])
@@ -642,18 +721,29 @@ def main():
 
         except Exception as e:
             # if not isinstance(e, PredictableException) and not isinstance(e, re.error):
+            # if e == "NoneType' object has no attribute 'groupdict":
+            #    print(e)
             error_idx.append(idx)
             # if data_name[:-3] == "practical_regexes":
             #    print(data_name, idx)
+            if str(e) == "can not make EXAMPLE_NUM of examples":
+                continue
+            if str(e) == "'NoneType' object has no attribute 'groupdict'":
+                continue
+            # print(e)
+            # print(symbolized_regex)
+            # print(repr(symbolized_regex))
+            # exit()
             continue
         # if data_name[:-3] == "practical_regexes":
         #    print(data_name, idx)
         # if idx % 1000 == 0:
         #    print(idx)
     save_file.close()
-    print("data_name:", data_name)
+    print(f"data_name: {data_name}, max_len: {max_len}", data_name)
     print("error count :", len(error_idx))
     print("total len:", len(regex_list))
+    print("max_len:", max_len)
 
 
 if __name__ == "__main__":

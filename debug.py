@@ -257,8 +257,8 @@ if __name__ == "__main__":
     print("Run time avg:", str(Direct_total_time / num), str(DC_total_time / num))
     print(
         "Run time (only succ) avg:",
-        str(Direct_total_time_onlysucc / count_both),
-        str(DC_total_time_onlysucc / count_both),
+        str(Direct_total_time_onlysucc / (count_both + 0.000001)),
+        str(DC_total_time_onlysucc / (count_both + 0.000001)),
     )
 
     print()
