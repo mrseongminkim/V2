@@ -13,4 +13,3 @@ python NeuralSplitter/train.py \
     --dropout_de 0.4 \
     --weight_decay 0.000001 \
     --add_seed 152 \
-    --set_transformer

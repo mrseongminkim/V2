@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # $1: [snort | lib | practical | 2 | 4 | 6 | 8 | 10]
-# $2: [ar | bf]
+# $2: [ar | bf | rg]
 time_limit=3
 
 if [ $1 == "snort" ]; then
@@ -37,6 +37,9 @@ if [ $2 == "ar" ]; then
 elif [ $2 == "bf" ]; then
     log_path+="blue_fringe"
     sub_model="blue_fringe"
+elif [ $2 == "rg" ]; then
+    log_path+="regex_generator"
+    sub_model="regex_generator"
 else
     sub_model="error"
 fi
