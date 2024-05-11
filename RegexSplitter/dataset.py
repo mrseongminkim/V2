@@ -69,8 +69,6 @@ class RegexDataset(Dataset):
                 "train_pos_ids": self.tokenize(train_pos),
                 "train_neg_ids": self.tokenize(train_neg),
                 "regex_ids": self.tokenize(regex),
-                "train_pos_len": self.get_len(train_pos),
-                "train_neg_len": self.get_len(train_neg),
             }
 
 

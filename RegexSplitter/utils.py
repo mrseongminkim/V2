@@ -1,9 +1,11 @@
 import random
 import os
+import subprocess as sp
 
 import torch
 import torch.nn as nn
 import numpy as np
+import tqdm
 
 
 def set_seed(seed: int):
@@ -28,7 +30,7 @@ def count_parameters(model):
 def train_fn(model, data_loader, optimizer, criterion, clip, teacher_forcing_ratio, device):
     model.train()
     epoch_loss = 0
-    for i, batch in enumerate(data_loader):
+    for i, batch in enumerate(tqdm.tqdm(data_loader)):
         # pos: example_length, batch * example
         # neg: example_length, batch * example
         # regex: regex_length, batch
@@ -61,7 +63,7 @@ def evaluate_fn(model, data_loader, criterion, device):
     model.eval()
     epoch_loss = 0
     with torch.no_grad():
-        for i, batch in enumerate(data_loader):
+        for i, batch in enumerate(tqdm.tqdm(data_loader)):
             # pos: example_length, batch * example
             # neg: example_length, batch * example
             # regex: regex_length, batch
@@ -132,3 +134,10 @@ class EarlyStopping:
                 f.write(f"valid loss: {valid_loss:7.2f}\n")
                 f.write(f"time: {time}\n")
             self.counter = 0
+
+
+def get_gpu_memory():
+    command = "nvidia-smi --query-gpu=memory.free --format=csv"
+    memory_free_info = sp.check_output(command.split()).decode("ascii").split("\n")[:-1][1:]
+    memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
+    return memory_free_values

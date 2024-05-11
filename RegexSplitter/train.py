@@ -80,17 +80,15 @@ n_layers = opt.n_layers
 hidden_dim = opt.hidden_dim
 n_epochs = opt.n_epochs
 clip = opt.clip
-expt_dir = opt.expt_dir + f"/gru/"
-# expt_dir = opt.expt_dir + "/{}__{}__{}__{}".format(rnn_cell, hidden_size, n_layers, bi)
 rnn_type = opt.rnn_type
+expt_dir = opt.expt_dir + "/{}/".format(rnn_type)
 
 vocab = Vocabulary()
 vocab_size = len(vocab)
 usage = "set2regex"
 pad_index = vocab.stoi["<pad>"]
 num_worker = 0
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
 train_data_loader = get_data_loader(train_file_path, usage, pad_index, regex_max_length, batch_size, num_worker, True)
 valid_data_loader = get_data_loader(valid_file_path, usage, pad_index, regex_max_length, batch_size, num_worker, False)
@@ -99,6 +97,7 @@ encoder = Encoder(vocab_size, hidden_dim, n_layers, rnn_type)
 attention = Attention(hidden_dim)
 decoder = Decoder(vocab_size, hidden_dim, n_layers, rnn_type, attention)
 model = Seq2Seq(encoder, decoder, device, rnn_type).to(device)
+
 model.apply(init_weights)
 print(f"The model has {count_parameters(model):,} trainable parameters")
 
@@ -124,6 +123,7 @@ for epoch in range(n_epochs):
         criterion,
         device,
     )
+    print(f"Epoch: {epoch + 1}")
     print(f"Train Loss: {train_loss:7.3f} | Train PPL: {np.exp(train_loss):7.3f}")
     print(f"Valid Loss: {valid_loss:7.3f} | Valid PPL: {np.exp(valid_loss):7.3f}")
     scheduler.step(valid_loss)
