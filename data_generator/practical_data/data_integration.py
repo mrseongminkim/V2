@@ -30,14 +30,14 @@ for data_idx, path in enumerate(data_list):
     data = file.readlines()
     random.shuffle(data)
 
+    # Use snort solely for test
     if data_idx == 0:
-        test_snort_file.writelines(data[:100])
-        valid.extend(data[100:200])
-        train.extend(data[200:])
+        test_snort_file.writelines(data)
+    # regexlib
     elif data_idx == 1:
-        test_regexlib_file.writelines(data[:500])
-        valid.extend(data[500:1000])
-        train.extend(data[1000:])
+        test_regexlib_file.writelines(data[:3_000])
+        valid.extend(data[3_000:3_500])
+        train.extend(data[3_500:])
     else:
         practical.extend(data)
 print("Practical")

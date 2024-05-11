@@ -130,35 +130,18 @@ class RE:
                 if regex.type == Type.HOLE:
                     if case.type == Type.U:
                         self.list.append(Hole())
-                        self.list.sort(
-                            key=lambda regex: (
-                                "~"
-                                if repr(regex) == "#"
-                                else ("}" if regex.hasHole() else repr(regex))
-                            )
-                        )
+                        self.list.sort(key=lambda regex: ("~" if repr(regex) == "#" else ("}" if regex.hasHole() else repr(regex))))
                         return True
                     else:
                         self.list[index] = case
-                        self.list.sort(
-                            key=lambda regex: (
-                                "~"
-                                if repr(regex) == "#"
-                                else ("}" if regex.hasHole() else repr(regex))
-                            )
-                        )
+                        self.list.sort(key=lambda regex: ("~" if repr(regex) == "#" else ("}" if regex.hasHole() else repr(regex))))
                         return True
                 elif regex.hasHole():
                     self.list[index].spread(case)
-                    self.list.sort(
-                        key=lambda regex: (
-                            "~" if repr(regex) == "#" else ("}" if regex.hasHole() else repr(regex))
-                        )
-                    )
+                    self.list.sort(key=lambda regex: ("~" if repr(regex) == "#" else ("}" if regex.hasHole() else repr(regex))))
                     return True
             return False
         elif self.type == Type.REGEX:
-            # 연속된 spread제어
             if case.type != Type.CHAR:
                 if case.type == self.lastRE:
                     return False
@@ -252,53 +235,29 @@ class RE:
 
                 if regex.type == Type.K:
                     # x*x
-                    if (
-                        index + 1 < len(self.list)
-                        and (regex.r.type == Type.CHAR or regex.r.type == Type.U)
-                        and repr(regex.r) == repr(self.list[index + 1])
-                    ):
+                    if index + 1 < len(self.list) and (regex.r.type == Type.CHAR or regex.r.type == Type.U) and repr(regex.r) == repr(self.list[index + 1]):
                         return True
-                    elif (
-                        regex.r.type == Type.C
-                        and index + len(regex.r.list) < len(self.list)
-                        and not self.list[index + len(regex.r.list)].hasHole()
-                    ):
+                    elif regex.r.type == Type.C and index + len(regex.r.list) < len(self.list) and not self.list[index + len(regex.r.list)].hasHole():
                         tmp = Concatenate()
                         tmp.list = self.list[index + 1 : index + len(regex.r.list) + 1]
                         if repr(regex.r) == repr(tmp):
                             return True
 
                     # x*x?
-                    elif (
-                        index + 1 < len(self.list)
-                        and self.list[index + 1].type == Type.Q
-                        and repr(regex.r) == repr(self.list[index + 1].r)
-                    ):
+                    elif index + 1 < len(self.list) and self.list[index + 1].type == Type.Q and repr(regex.r) == repr(self.list[index + 1].r):
                         return True
 
                 elif regex.type == Type.Q:
                     # x?x
-                    if (
-                        index + 1 < len(self.list)
-                        and (regex.r.type == Type.CHAR or regex.r.type == Type.U)
-                        and repr(regex.r) == repr(self.list[index + 1])
-                    ):
+                    if index + 1 < len(self.list) and (regex.r.type == Type.CHAR or regex.r.type == Type.U) and repr(regex.r) == repr(self.list[index + 1]):
                         return True
-                    elif (
-                        regex.r.type == Type.C
-                        and index + len(regex.r.list) < len(self.list)
-                        and not self.list[index + len(regex.r.list)].hasHole()
-                    ):
+                    elif regex.r.type == Type.C and index + len(regex.r.list) < len(self.list) and not self.list[index + len(regex.r.list)].hasHole():
                         tmp = Concatenate()
                         tmp.list = self.list[index + 1 : index + len(regex.r.list) + 1]
                         if repr(regex.r) == repr(tmp):
                             return True
                     # x?x*
-                    elif (
-                        index + 1 < len(self.list)
-                        and self.list[index + 1].type == Type.K
-                        and repr(regex.r) == repr(self.list[index + 1].r)
-                    ):
+                    elif index + 1 < len(self.list) and self.list[index + 1].type == Type.K and repr(regex.r) == repr(self.list[index + 1].r):
                         return True
 
             return any(list(i.redundant_concat1() for i in self.list))
@@ -326,15 +285,11 @@ class RE:
                                 return True
                         elif index > index2:
                             tmp.list = self.list[index2:index]
-                            if all(list(i.hasEps() for i in tmp.list)) and is_inclusive(
-                                regex, tmp, alphabet_size
-                            ):
+                            if all(list(i.hasEps() for i in tmp.list)) and is_inclusive(regex, tmp, alphabet_size):
                                 return True
                         elif index < index2:
                             tmp.list = self.list[index + 1 : index2 + 1]
-                            if all(list(i.hasEps() for i in tmp.list)) and is_inclusive(
-                                regex, tmp, alphabet_size
-                            ):
+                            if all(list(i.hasEps() for i in tmp.list)) and is_inclusive(regex, tmp, alphabet_size):
                                 return True
                         else:
                             continue
@@ -372,11 +327,7 @@ class RE:
                             tmp2 = Concatenate()
                             tmp2.list = self.r.list[index + 1 : len(self.r.list)]
 
-                        if (
-                            not regex.r.hasEps()
-                            and (left or is_inclusive(regex, tmp1, alphabet_size))
-                            and (right or is_inclusive(regex, tmp2, alphabet_size))
-                        ):
+                        if not regex.r.hasEps() and (left or is_inclusive(regex, tmp1, alphabet_size)) and (right or is_inclusive(regex, tmp2, alphabet_size)):
                             return True
 
             return self.r.KCK(alphabet_size)
@@ -424,12 +375,7 @@ class RE:
                             tmp2.list = self.r.list[index + 1 : len(self.r.list)]
                             righteps = all(list(i.hasEps() for i in tmp2.list))
 
-                        if (
-                            lefteps
-                            and righteps
-                            and (left or is_inclusive(KleenStar(regex), tmp1, alphabet_size))
-                            and (right or is_inclusive(KleenStar(regex), tmp2, alphabet_size))
-                        ):
+                        if lefteps and righteps and (left or is_inclusive(KleenStar(regex), tmp1, alphabet_size)) and (right or is_inclusive(KleenStar(regex), tmp2, alphabet_size)):
                             return True
 
                 # single regex
@@ -466,12 +412,7 @@ class RE:
                                 tmp2.list = self.r.list[j + 1 : len(self.r.list)]
                                 righteps = all(list(i.hasEps() for i in tmp2.list))
 
-                            if (
-                                lefteps
-                                and righteps
-                                and (left or is_inclusive(KleenStar(regex), tmp1, alphabet_size))
-                                and (right or is_inclusive(KleenStar(regex), tmp2, alphabet_size))
-                            ):
+                            if lefteps and righteps and (left or is_inclusive(KleenStar(regex), tmp1, alphabet_size)) and (right or is_inclusive(KleenStar(regex), tmp2, alphabet_size)):
                                 return True
 
             return self.r.KCQ(alphabet_size)
@@ -492,10 +433,7 @@ class RE:
 
         elif self.type == Type.Q:
             # (xx?)? (xx*)?
-            if self.r.type == Type.C and (
-                self.r.list[len(self.r.list) - 1].type == Type.K
-                or self.r.list[len(self.r.list) - 1].type == Type.Q
-            ):
+            if self.r.type == Type.C and (self.r.list[len(self.r.list) - 1].type == Type.K or self.r.list[len(self.r.list) - 1].type == Type.Q):
                 if len(self.r.list) == 2:
                     tmp = self.r.list[0]
                 else:
@@ -537,10 +475,7 @@ class RE:
         elif self.type == Type.U:
             for index, regex in enumerate(self.list):
                 for index2, regex2 in enumerate(self.list):
-                    if index < index2 and (
-                        is_inclusive(regex, regex2, alphabet_size)
-                        or is_inclusive(regex2, regex, alphabet_size)
-                    ):
+                    if index < index2 and (is_inclusive(regex, regex2, alphabet_size) or is_inclusive(regex2, regex, alphabet_size)):
                         return True
 
             for index, regex in enumerate(self.list):
@@ -577,9 +512,7 @@ class RE:
                         if index1 < index2 and regex2.type == Type.C:
                             if repr(regex1.list[0]) == repr(regex2.list[0]):
                                 return True
-                            if repr(regex1.list[len(regex1.list) - 1]) == repr(
-                                regex2.list[len(regex2.list) - 1]
-                            ):
+                            if repr(regex1.list[len(regex1.list) - 1]) == repr(regex2.list[len(regex2.list) - 1]):
                                 return True
 
             return any(list(i.prefix() for i in self.list))
@@ -631,26 +564,14 @@ class RE:
 
                 if regex.type == Type.K:
                     # x*x?
-                    if (
-                        index + 1 < len(self.list)
-                        and self.list[index + 1].type == Type.Q
-                        and repr(regex.r) == repr(self.list[index + 1].r)
-                    ):
+                    if index + 1 < len(self.list) and self.list[index + 1].type == Type.Q and repr(regex.r) == repr(self.list[index + 1].r):
                         return True
                     # x*x*
-                    if (
-                        index + 1 < len(self.list)
-                        and self.list[index + 1].type == Type.K
-                        and repr(regex.r) == repr(self.list[index + 1].r)
-                    ):
+                    if index + 1 < len(self.list) and self.list[index + 1].type == Type.K and repr(regex.r) == repr(self.list[index + 1].r):
                         return True
                 elif regex.type == Type.Q:
                     # x?x*
-                    if (
-                        index + 1 < len(self.list)
-                        and self.list[index + 1].type == Type.K
-                        and repr(regex.r) == repr(self.list[index + 1].r)
-                    ):
+                    if index + 1 < len(self.list) and self.list[index + 1].type == Type.K and repr(regex.r) == repr(self.list[index + 1].r):
                         return True
 
             return any(list(i.alpha() for i in self.list))
@@ -659,9 +580,7 @@ class RE:
 
             for index, regex in enumerate(self.list):
                 for index2, regex2 in enumerate(self.list):
-                    if index < index2 and (
-                        is_inclusive(regex, regex2) or is_inclusive(regex2, regex)
-                    ):
+                    if index < index2 and (is_inclusive(regex, regex2) or is_inclusive(regex2, regex)):
                         return True
 
             for index, regex in enumerate(self.list):

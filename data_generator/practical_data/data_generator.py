@@ -212,17 +212,6 @@ def main():
             pass
         elif data_name[:-3] == "practical_regexes":
             regex = regex[1:-1]
-            # Xeger takes too long on this ones, and probably not usable anyway
-            # if regex == "(?:a(?:b(?:c(?:d(?:e(?:f(?:g(?:h(?:i(?:j(?:k(?:l(?:FooBar){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}){0,2}":
-            #    error_idx.append(idx)
-            #    continue
-            # elif regex == "(?:a(?:b(?:c(?:d(?:e(?:f(?:g(?:h(?:i(?:j(?:k(?:l(?:m(?:n(?:o(?:p(?:q(?:r(?:s(?:t(?:u(?:v(?:w(?:x(?:y(?:z(?:FooBar)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)+)":
-            #    error_idx.append(idx)
-            #    continue
-            # elif regex == "(?:a(?:b(?:c(?:d(?:e(?:f(?:g(?:h(?:i(?:j(?:k(?:l(?:FooBar){2}){2}){2}){2}){2}){2}){2}){2}){2}){2}){2}){2}){2}":
-            #    error_idx.append(idx)
-            #    continue
-            # pass
         elif data_name == "snort-clean":
             regex = regex[1 : regex.rfind("/")]
         try:
@@ -249,17 +238,7 @@ def main():
                 valid_neg = neg[EXAMPLE_NUM // 2 :]
                 labelled_pos = label
 
-                # print(idx, regex, "\t", substituted_regex)
-                # writer.writerow([train_pos, valid_pos, train_neg, valid_neg, labelled_pos, subregex_list])
-                # """
-                writer.writerow([f"{idx} regex"])
-                writer.writerow([train_pos])
-                # writer.writerow([valid_pos])
-                # writer.writerow([train_neg])
-                # writer.writerow([valid_neg])
-                writer.writerow([labelled_pos])
-                writer.writerow([subregex_list])
-                # """
+                writer.writerow([train_pos, valid_pos, train_neg, valid_neg, labelled_pos, subregex_list])
 
         except PredictableException:
             error_idx.append(idx)
