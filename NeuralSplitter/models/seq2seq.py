@@ -31,7 +31,6 @@ class Seq2seq(nn.Module):
           representing lengths of output sequences, *KEY_SEQUENCE* : list of sequences, where each sequence is a list of
           predicted token IDs, *KEY_INPUT* : target outputs if provided for decoding, *KEY_ATTN_SCORE* : list of
           sequences, where each list is of attention weights }.
-
     """
 
     def __init__(self, encoder, decoder, decode_function=F.log_softmax):

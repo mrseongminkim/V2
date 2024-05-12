@@ -25,13 +25,13 @@ parser = argparse.ArgumentParser()
 # data setting
 parser.add_argument(
     "--train_path",
-    default="./data/random_data/train.csv",
+    default="./data/practical_data/integrated/test_snort.csv",
     dest="train_path",
     help="Specify the path to the training data file",
 )
 parser.add_argument(
     "--valid_path",
-    default="./data/random_data/valid.csv",
+    default="./data/practical_data/integrated/test_snort.csv",
     dest="valid_path",
     help="Specify the path to the validation data file",
 )
@@ -110,7 +110,7 @@ parser.add_argument(
     "--gru",
     action="store_true",
     dest="gru",
-    default=False,
+    default=True,
     help="Specify whether to use GRU cell for RNN. If not specified, LSTM will be used by default.",
 )
 parser.add_argument(

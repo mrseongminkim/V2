@@ -121,6 +121,7 @@ class DecoderRNN(BaseRNN):
             # layers, batch, 2 * hidden을 layers, batch * 10, 2 * hidden으로 바꾼다.
             # batch * example과 같이 만들어주는 것?
             hidden = torch.cat((hidden, self.rnn1_hidden), -1)
+
             # self.rnn1_hidden: layers * (batch * examples) * (hidden * 2)
             # 최종적으로 layers * (batch * examples) * (hidden * 2 * 2)
             hidden = self.hidden_out1(hidden)

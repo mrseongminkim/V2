@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from string_preprocess import pad_attention
 
 
 class Attention(nn.Module):
@@ -42,9 +41,7 @@ class Attention(nn.Module):
     def __init__(self, dim, attn_mode):
         super(Attention, self).__init__()
         self.mask = None
-        self.attn_mode = (
-            attn_mode  # True (attention both pos and neg) # False (attention only pos samples)
-        )
+        self.attn_mode = attn_mode  # True (attention both pos and neg) # False (attention only pos samples)
         if self.attn_mode:
             self.linear_out = nn.Linear(dim * 3, dim)
         else:
@@ -68,8 +65,6 @@ class Attention(nn.Module):
         # concat -> (batch, out_len, 2*dim)
         combined = torch.cat((mix, output), dim=2)
         # output -> (batch, out_len, dim)
-        output = torch.tanh(self.linear_out(combined.view(-1, 2 * hidden_size))).view(
-            batch_size, -1, hidden_size
-        )
+        output = torch.tanh(self.linear_out(combined.view(-1, 2 * hidden_size))).view(batch_size, -1, hidden_size)
 
         return output, attn
