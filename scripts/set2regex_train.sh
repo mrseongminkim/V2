@@ -16,15 +16,15 @@ elif [ $1 == "random" ]; then
     expt_dir="./saved_models/set2regex/random"
 fi
 
-python RegexSplitter/train.py \
+python set2regx/train.py \
     --train_file_path $train_file_path \
     --valid_file_path $valid_file_path \
     --expt_dir $expt_dir \
     --regex_max_length 100 \
     --batch_size 128 \
     --teacher_forcing_ratio 0.5 \
-    --n_layers 2 \
-    --hidden_dim 512 \
+    --n_layers 4 \
+    --hidden_dim 1024 \
     --n_epochs 999999999999 \
     --clip 1 \
-    --rnn_type "gru"
+    --rnn_type "lstm"

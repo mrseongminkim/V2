@@ -141,3 +141,24 @@ def get_gpu_memory():
     memory_free_info = sp.check_output(command.split()).decode("ascii").split("\n")[:-1][1:]
     memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
     return memory_free_values
+
+
+def synthesize_regex(pos, neg, model, vocab, device, regex_max_length):
+    model.eval()
+    with torch.no_grad():
+        # if the given pos and neg are list of strings
+        # we need to assert len is 10
+        if isinstance(pos, list) and isinstance(neg, list):
+            pass
+        encoder_outputs, hidden, cell = model.encoder(pos, neg)
+        inputs = vocab.lookup_indices(["<sos>"])
+        for _ in range(regex_max_length):
+            inputs_tensor = torch.LongTensor([inputs[-1]]).to(device)
+            output, hidden, cell, attention = model.decoder(inputs_tensor, encoder_outputs, hidden, cell)
+            predicted_token = output.argmax(-1).item()
+            inputs.append(predicted_token)
+            if predicted_token == vocab.stoi["<eos>"]:
+                break
+        tokens = vocab.lookup_tokens(inputs)
+    regex = "".join(tokens[1:-1])
+    return regex
