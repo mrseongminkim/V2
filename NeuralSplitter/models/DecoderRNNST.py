@@ -1,19 +1,10 @@
-import random
-
-import numpy as np
-
 import torch
+import numpy as np
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
 
-from .attention import Attention
-from .baseRNN import BaseRNN
-
-if torch.cuda.is_available():
-    import torch.cuda as device
-else:
-    import torch as device
+from models.attention import Attention
+from models.baseRNN import BaseRNN
 
 
 class DecoderRNNST(BaseRNN):
@@ -67,7 +58,7 @@ class DecoderRNNST(BaseRNN):
 
     # except sos, eos
     def __init__(self, vocab_size, max_len, hidden_size, n_layers=1, rnn_cell="LSTM", bidirectional=False, input_dropout_p=0, dropout_p=0, use_attention=False, attn_mode=False):
-        super(DecoderRNNST, self).__init__(vocab_size, max_len, hidden_size, input_dropout_p, dropout_p, n_layers, rnn_cell)
+        super().__init__(vocab_size, max_len, hidden_size, input_dropout_p, dropout_p, n_layers, rnn_cell)
 
         self.bidirectional_encoder = bidirectional
         self.embed_size = 4
@@ -86,52 +77,23 @@ class DecoderRNNST(BaseRNN):
             self.attention = Attention(self.hidden_size, attn_mode)
 
         self.out = nn.Linear(self.hidden_size, self.output_size)
-        # hidden_out1 is not used anymore
-        self.hidden_out1 = nn.Linear(int(self.hidden_size / 2), self.hidden_size)
+        self.hidden_out1 = nn.Linear(self.hidden_size * 2, self.hidden_size)
         self.hidden_out2 = nn.Linear(self.hidden_size * 2, self.hidden_size)
 
     def forward_step(self, input_var, embedding, hidden, encoder_outputs, function):
-
         batch_size, set_size, seq_len = input_var.size(0), input_var.size(1), input_var.size(2)
 
         one_hot = F.one_hot(input_var.to(device="cuda"), num_classes=self.vocab_size)
         embedded = one_hot.view(batch_size * set_size, seq_len, -1).float()
-        # embedded = embedding(input_var.reshape(batch_size * set_size, seq_len))
-        embedded = self.input_dropout(embedded)
-
-        # print(self.rnn1_hidden.shape) #  2, 5120, 512 num_layer
-        # print(hidden.shape) # 512, 256
-        # hidden : num_layers x batch_size x (hidden_dim * 2)
-        # encoder_outputs[0] : batch_size x set_size x seq_len x hidden_dim
-        # encoder_outputs[1] : batch_size x set_size x hidden_dim
-        # rnn1_dim : num_layers x (batch_size * set_size) x hidden_dim
-
-        # print(hidden[0].shape) # 256
-
-        # if type(self.rnn) is nn.LSTM:
-        #     hidden = (hidden[0].repeat_interleave(10, dim=1), hidden[1].repeat_interleave(10, dim=1))  # 2, 640, 128 of tuple2
-        #     hidden = (torch.cat((hidden[0], self.rnn1_hidden[0]), -1), torch.cat((hidden[1], self.rnn1_hidden[1]), -1)) # 2, 640, 256 of tuple2
-        #     hidden = (self.hidden_out1(hidden[0]), self.hidden_out2(hidden[1]))
-        # else:
-        #     hidden = hidden.repeat_interleave(10, dim=1)
-        #     hidden = torch.cat((hidden, self.rnn1_hidden), -1)
-        #     hidden = self.hidden_out1(hidden)
-
-        # output, hidden = self.rnn(embedded, hidden)  #(640,10,128)
 
         ## ST
-        set_hidden = torch.stack(tuple(hidden), dim=0).repeat_interleave(10, dim=0)  # 5120, 256
-        # seq_hidden = self.rnn1_hidden.view(batch_size * 10 , -1) # 5120, 512
-        seq_hidden = self.rnn1_hidden  # 2, 5102, 512
-        # set_hidden = self.hidden_out1(set_hidden)   # 5120, 512
-        set_hidden = torch.stack((set_hidden, set_hidden.clone().detach()), dim=0)
-
+        set_hidden = hidden.repeat_interleave(10, dim=1)
+        seq_hidden = self.rnn1_hidden
         hidden = torch.cat((set_hidden, seq_hidden), -1)  # 2, 5120, 512 of tuple2
 
-        hidden = self.hidden_out2(hidden)  # 5120, 512
-        # print(hidden.shape)
-        # print(embedded.shape)
-        output, hidden = self.rnn(embedded, (hidden, torch.zeros(2, batch_size * 10, self.hidden_size).to(device="cuda")))  # (640,10,128)
+        hidden = self.hidden_out1(hidden)  # 5120, 512
+
+        output, hidden = self.rnn(embedded, hidden)  # (640,10,128)
 
         attn = None
         if self.use_attention:
@@ -151,16 +113,8 @@ class DecoderRNNST(BaseRNN):
 
         inputs, batch_size, max_length = self._validate_args(inputs, encoder_hidden, encoder_outputs, function, teacher_forcing_ratio)
 
-        # inputs -> (batch, 10, 10)
-        # encoder_hidden -> (num_layer x num_dir, batch, hidden)
-
-        # encoder_hidden: batch * (hidden_size * 2)
-        # rnn1_hidden: (batch * examples) * hidden_size
         decoder_hidden, rnn1_hidden = self._init_state(encoder_hidden, rnn1_hidden)
-
         self.rnn1_hidden = rnn1_hidden
-        # print(self.rnn1_hidden.shape)
-        # decoder_hidden -> if bidirecional: (num_layer, batch, 2 x hidden) else : (num_layer x num_dir, batch, hidden)
 
         decoder_outputs = []
         sequence_symbols = []
@@ -168,7 +122,6 @@ class DecoderRNNST(BaseRNN):
 
         # step: single symbol index of regex, step_output = (640,12)
         def decode(step, step_output, step_attn):
-            # print(step_output.shape)
             decoder_outputs.append(step_output)
             if self.use_attention:
                 ret_dict[DecoderRNNST.KEY_ATTN_SCORE].append(step_attn)
@@ -177,9 +130,6 @@ class DecoderRNNST(BaseRNN):
 
             return symbols
 
-        # decoder_input = inputs[:, 0].unsqueeze(1)  # (batch, 1) # (batch, set, len) -> (batch,1,len)
-        # print(inputs.shape) # input variable 64,10,10
-        # print(max_length)   # 10
         decoder_output, decoder_hidden, attn = self.forward_step(inputs, embedding, decoder_hidden, encoder_outputs, function=function)
 
         for di in range(decoder_output.size(1)):
@@ -187,7 +137,7 @@ class DecoderRNNST(BaseRNN):
             if attn is not None:
                 if self.attn_mode:
                     step_attn = ((attn[0][0][:, di, :, :], attn[0][1][:, di, :, :]), (attn[1][0][:, di, :], attn[1][1][:, di, :]))
-                else:  # attn only pos
+                else:
                     step_attn = attn[:, di, :]
             else:
                 step_attn = None
@@ -196,12 +146,11 @@ class DecoderRNNST(BaseRNN):
         ret_dict[DecoderRNNST.KEY_SEQUENCE] = sequence_symbols
 
         ret_dict[DecoderRNNST.KEY_LENGTH] = lengths.tolist()
+
         return decoder_outputs, decoder_hidden, ret_dict
 
     def _init_state(self, encoder_hidden, sub_hidden):
         """Initialize the encoder hidden state."""
-        # encoder_hidden: batch * (hidden_size * 2)
-        # rnn1_hidden: (batch * examples) * hidden_size
         if encoder_hidden is None:
             return None
         encoder_hidden = self._cat_directions(encoder_hidden, True)
@@ -212,15 +161,10 @@ class DecoderRNNST(BaseRNN):
         """If the encoder is bidirectional, do the following transformation.
         (#directions * #layers, #batch, hidden_size) -> (#layers, #batch, #directions * hidden_size)
         """
-
-        # if self.bidirectional_encoder:
-        #     h = torch.cat([h[0:h.size(0):2], h[1:h.size(0):2]], 2)
-        ## ST
         if st:
             h = h
         else:
-            h = h.unsqueeze(0)
-            # h = torch.cat([h[0 : h.size(0) : 2], h[1 : h.size(0) : 2]], 2)
+            h = torch.cat([h[0 : h.size(0) : 2], h[1 : h.size(0) : 2]], 2)
         return h
 
     def _validate_args(self, inputs, encoder_hidden, encoder_outputs, function, teacher_forcing_ratio):

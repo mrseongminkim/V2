@@ -20,14 +20,15 @@ elif [ $1 == "debug" ]; then
     expt_dir="saved_models/practical"
 fi
 
-python RegexSplitter/train.py \
-    --train_file_path $train_file_path \
-    --valid_file_path $valid_file_path \
+python NeuralSplitter/train.py \
+    --train_path $train_file_path \
+    --valid_path $valid_file_path \
     --expt_dir $expt_dir \
-    --hidden_dim 256 \
-    --n_layers 2 \
+    --hidden_size 256 \
+    --num_layer 2 \
     --weight_decay 0.000001 \
     --batch_size 512 \
-    --rnn_type "lstm" \
-    --gpu_idx 2 \
-# --set_transformer \
+    --gpu_idx 1 \
+    --set_transformer \
+    --gru \
+    --lr 0.0001 \

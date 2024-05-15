@@ -78,7 +78,7 @@ parser.add_argument(
     "--dropout_en",
     action="store",
     dest="dropout_en",
-    default=0.4,
+    default=0.0,
     type=float,
     help="Specify the dropout rate for the encoder.",
 )
@@ -86,7 +86,7 @@ parser.add_argument(
     "--dropout_de",
     action="store",
     dest="dropout_de",
-    default=0.4,
+    default=0.0,
     type=float,
     help="Specify the dropout rate for the decoder.",
 )
@@ -110,7 +110,7 @@ parser.add_argument(
     "--gru",
     action="store_true",
     dest="gru",
-    default=True,
+    default=False,
     help="Specify whether to use GRU cell for RNN. If not specified, LSTM will be used by default.",
 )
 parser.add_argument(
@@ -207,7 +207,7 @@ hidden_size = opt.hidden_size
 n_layers = opt.num_layer
 bidirectional = opt.bidirectional
 bi = "2" if bidirectional else "1"
-expt_dir = opt.expt_dir + "/{}__{}__{}__{}".format(rnn_cell, hidden_size, n_layers, bi)
+expt_dir = opt.expt_dir + "/lr=Truebr=True{}_{}_{}_{}".format(rnn_cell, hidden_size, n_layers, opt.set_transformer)
 
 if opt.set_transformer:
     encoder = EncoderRNNST
@@ -222,7 +222,7 @@ if not opt.resume:
         int(config["data"]["num_examples"]),
         hidden_size,
         dropout_p=opt.dropout_en,
-        input_dropout_p=0.25,
+        input_dropout_p=0.0,
         bidirectional=bidirectional,
         n_layers=n_layers,
         rnn_cell=rnn_cell,
@@ -233,7 +233,7 @@ if not opt.resume:
         int(config["data"]["num_examples"]),
         hidden_size * (2 if bidirectional else 1),
         dropout_p=opt.dropout_de,
-        input_dropout_p=0.25,
+        input_dropout_p=0.0,
         use_attention=True,
         bidirectional=bidirectional,
         rnn_cell=rnn_cell,
@@ -249,8 +249,9 @@ if not opt.resume:
         param.data.uniform_(-0.1, 0.1)
 
     optimizer = Optimizer(
-        torch.optim.Adam(s2smodel.parameters(), lr=opt.lr, weight_decay=opt.weight_decay),
-        max_grad_norm=0.5,
+        torch.optim.Adam(s2smodel.parameters(), lr=opt.lr),
+        # torch.optim.Adam(s2smodel.parameters(), lr=opt.lr, weight_decay=opt.weight_decay),
+        max_grad_norm=0,
     )
     scheduler = ReduceLROnPlateau(optimizer.optimizer, "min", factor=0.1, verbose=True, patience=15)
     optimizer.set_scheduler(scheduler)

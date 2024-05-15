@@ -1,24 +1,24 @@
 #!/bin/bash
 
 # $1: [snort | lib | practical | 2 | 4 | 6 | 8 | 10]
-# $2: [ar | bf]
+# $2: [ar | bf | rg]
+# $3: [basic | parallel | prefix]
 alphabet_size=5
-time_limit=3
 
 if [ $1 == "snort" ]; then
     data_path="./data/practical_data/integrated/test_snort.csv"
     log_path="./log_data/snort/"
-    checkpoint_pos="./saved_models/practical/gru__256__2__2"
+    checkpoint_pos="./saved_models/practical/onegru_256_2_True"
     data_type="practical"
 elif [ $1 == "lib" ]; then
     data_path="./data/practical_data/integrated/test_regexlib.csv"
     log_path="./log_data/regexlib/"
-    checkpoint_pos="./saved_models/practical/gru__256__2__2"
+    checkpoint_pos="./saved_models/practical/onegru_256_2_True"
     data_type="practical"
 elif [ $1 == "practical" ]; then
     data_path="./data/practical_data/integrated/test_practicalregex.csv"
     log_path="./log_data/practicalregex/"
-    checkpoint_pos="./saved_models/practical/gru__256__2__2"
+    checkpoint_pos="./saved_models/practical/onegru_256_2_True"
     data_type="practical"
 fi
 case $1 in "2"|"4"|"6"|"8"|"10")
@@ -39,11 +39,21 @@ else
     sub_model="error"
 fi
 
+if [ $3 == "basic" ]; then
+    synthesis_strategy="sequential_basic"
+elif [ $3 == "parallel" ]; then
+    synthesis_strategy="parallel"
+elif [ $3 == "prefix" ]; then
+    synthesis_strategy="sequential_prefix"
+else
+    synthesis_strategy="error"
+fi
+
 python synthesis.py \
     --data_path $data_path \
     --log_path $log_path \
     --checkpoint_pos $checkpoint_pos \
     --data_type $data_type \
     --sub_model $sub_model \
-    --time_limit $time_limit \
-    --alphabet_size $alphabet_size
+    --alphabet_size $alphabet_size \
+    --synthesis_strategy $synthesis_strategy \

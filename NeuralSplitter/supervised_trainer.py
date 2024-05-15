@@ -79,9 +79,7 @@ class SupervisedTrainer:
 
         self.logger = logging.getLogger(__name__)
 
-    def _train_batch(
-        self, input_variable, input_lengths, target_variable, regex, model, teacher_forcing_ratio
-    ):
+    def _train_batch(self, input_variable, input_lengths, target_variable, regex, model, teacher_forcing_ratio):
         loss = self.loss
         # decoder_outputs: max_len * (batch_size * num_examples) * vocab_size
         # other.sequence = max_len * (batch * num_examples)
@@ -117,9 +115,7 @@ class SupervisedTrainer:
                 # match_seq은 그러면 같은 것들이 나오게 되겠네 - True or False
                 match_seq = seqlist[step].view(-1).eq(target).unsqueeze(-1)
             else:
-                match_seq = torch.cat(
-                    (match_seq, seqlist[step].view(-1).eq(target).unsqueeze(-1)), dim=1
-                )
+                match_seq = torch.cat((match_seq, seqlist[step].view(-1).eq(target).unsqueeze(-1)), dim=1)
 
             # 계속 concat해 나간다.
 
@@ -132,9 +128,7 @@ class SupervisedTrainer:
 
         # target_variable.eq(pad)를 하니 pad가 아니면 모두 False
         # match_seq은 모든 example에 대해서 레이블과 같은지 다른지를 나타냄
-        result = torch.logical_or(
-            match_seq, target_variable.eq(vocab.stoi["<pad>"]).to(device="cuda")
-        )
+        result = torch.logical_or(match_seq, target_variable.eq(vocab.stoi["<pad>"]).to(device="cuda"))
         # result = (batch * max_len) * num_example
         # 맞은 example의 개수를 센다.
         self.match_seqnum += [example.all() for example in result].count(True)
@@ -151,9 +145,7 @@ class SupervisedTrainer:
 
         return loss.get_loss()
 
-    def _train_epoches(
-        self, data, model, n_epochs, start_epoch, start_step, dev_data=None, teacher_forcing_ratio=0
-    ):
+    def _train_epoches(self, data, model, n_epochs, start_epoch, start_step, dev_data=None, teacher_forcing_ratio=0):
         log = self.logger
 
         print_loss_total = 0
@@ -232,24 +224,18 @@ class SupervisedTrainer:
             accuracyT = self.match / self.total  # token wise
             acc_seqT = self.match_seqnum / (self.total_data_size * 10)  # example wise
             acc_setT = self.match_setnum / self.total_data_size  # regex wise
-            train_log = (
-                "Train %s: %.4f, Accuracy: %.4f, Accuracy of seq: %.4f, Accuracy of set: %.4f"
-                % (
-                    self.loss.name,
-                    epoch_loss_avg,
-                    accuracyT,
-                    acc_seqT,
-                    acc_setT,
-                )
+            train_log = "Train %s: %.4f, Accuracy: %.4f, Accuracy of seq: %.4f, Accuracy of set: %.4f" % (
+                self.loss.name,
+                epoch_loss_avg,
+                accuracyT,
+                acc_seqT,
+                acc_setT,
             )
 
             if dev_data is not None:
                 dev_loss, accuracy, acc_seq, acc_set = self.evaluator.evaluate(model, dev_data)
                 avg_valid_losses.append(dev_loss)
-                valid_log = (
-                    "Dev %s: %.4f, Accuracy: %.4f, Accuracy of seq: %.4f, Accuracy of set: %.4f"
-                    % (self.loss.name, dev_loss, accuracy, acc_seq, acc_set)
-                )
+                valid_log = "Dev %s: %.4f, Accuracy: %.4f, Accuracy of seq: %.4f, Accuracy of set: %.4f" % (self.loss.name, dev_loss, accuracy, acc_seq, acc_set)
                 # set accuracy 기준으로 early stopping이 작동한다.
                 # 왜?
                 early_stopping(
@@ -292,7 +278,7 @@ class SupervisedTrainer:
                     acc_set,
                     epoch_loss_avg,
                     dev_loss,
-                    start_time - time.time(),
+                    time.time() - start_time,
                 )
                 model.train(mode=True)
             else:
@@ -350,9 +336,7 @@ class SupervisedTrainer:
                 optimizer = Optimizer(optim.Adam(model.parameters()), max_grad_norm=5)
             self.optimizer = optimizer
 
-        self.logger.info(
-            "Optimizer: %s, Scheduler: %s" % (self.optimizer.optimizer, self.optimizer.scheduler)
-        )
+        self.logger.info("Optimizer: %s, Scheduler: %s" % (self.optimizer.optimizer, self.optimizer.scheduler))
         train_loss, valid_loss = self._train_epoches(
             data,
             model,

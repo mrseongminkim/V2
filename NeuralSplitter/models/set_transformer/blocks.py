@@ -40,7 +40,6 @@ class MultiheadAttentionBlock(nn.Module):
 
 
 class SetAttentionBlock(nn.Module):
-
     def __init__(self, d, h, rff):
         super().__init__()
         self.mab = MultiheadAttentionBlock(d, h, rff)

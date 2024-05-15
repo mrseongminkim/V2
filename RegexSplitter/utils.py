@@ -70,14 +70,12 @@ def train_fn(model, data_loader, optimizer, criterion, clip, device, vocab):
         pos = batch["pos"].to(device)
         label = batch["label"].to(device)
 
+        example_length = label.shape[0]
+
         n_string += label.shape[-1]
 
         output = model(pos)
         # output: example_length, batch * example, vocab_size
-
-        matched_string, matched_set = check_match(output, label, vocab)
-        string_match += matched_string
-        set_match += matched_set
 
         vocab_size = output.shape[-1]
         output = output.view(-1, vocab_size)
@@ -86,6 +84,9 @@ def train_fn(model, data_loader, optimizer, criterion, clip, device, vocab):
         loss = criterion(output, label)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+        matched_string, matched_set = check_match(output.view(example_length, -1, vocab_size), label.view(example_length, -1), vocab)
+        string_match += matched_string
+        set_match += matched_set
         optimizer.step()
         optimizer.zero_grad()
         epoch_loss += loss.item()
