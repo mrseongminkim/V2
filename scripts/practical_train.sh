@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# $1: [practical | random]
+# $1: [practical | random | debug]
 
 practical_train="./data/practical_data/integrated/train.csv"
 practical_valid="./data/practical_data/integrated/valid.csv"
@@ -26,7 +26,6 @@ python NeuralSplitter/train.py \
     --expt_dir $expt_dir \
     --hidden_size 256 \
     --num_layer 2 \
-    --weight_decay 0.000001 \
     --batch_size 512 \
     --gpu_idx 1 \
     --set_transformer \

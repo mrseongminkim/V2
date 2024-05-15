@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# $1: [practical | random]
+# $1: [practical | random | debug]
 
 practical_train="./data/practical_data/integrated/train.csv"
 practical_valid="./data/practical_data/integrated/valid.csv"
@@ -14,17 +14,20 @@ elif [ $1 == "random" ]; then
     train_file_path="./data/random_data/train.csv"
     valid_file_path="./data/random_data/valid.csv"
     expt_dir="./saved_models/set2regex/random"
+elif [ $1 == "debug" ]; then
+    train_file_path=$debug
+    valid_file_path=$debug
+    expt_dir="./saved_models/set2regex/debug"
 fi
 
-python set2regx/train.py \
-    --train_file_path $train_file_path \
-    --valid_file_path $valid_file_path \
+python NeuralSplitter/set2regx_train.py \
+    --train_path $train_file_path \
+    --valid_path $valid_file_path \
     --expt_dir $expt_dir \
-    --regex_max_length 100 \
-    --batch_size 128 \
-    --teacher_forcing_ratio 0.5 \
-    --n_layers 4 \
-    --hidden_dim 1024 \
-    --n_epochs 999999999999 \
-    --clip 1 \
-    --rnn_type "lstm"
+    --hidden_size 256 \
+    --num_layer 2 \
+    --batch_size 512 \
+    --gpu_idx 1 \
+    --set_transformer \
+    --gru \
+    --lr 0.0001 \
