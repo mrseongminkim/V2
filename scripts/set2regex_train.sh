@@ -20,7 +20,7 @@ elif [ $1 == "debug" ]; then
     expt_dir="./saved_models/set2regex/debug"
 fi
 
-python NeuralSplitter/set2regx_train.py \
+python set2regex/train.py \
     --train_path $train_file_path \
     --valid_path $valid_file_path \
     --expt_dir $expt_dir \
@@ -28,6 +28,9 @@ python NeuralSplitter/set2regx_train.py \
     --num_layer 2 \
     --batch_size 512 \
     --gpu_idx 1 \
+    --rnn_cell lstm \
     --set_transformer \
-    --gru \
-    --lr 0.0001 \
+    #--attn_mode \
+
+# if attn_mode true
+# it attend on negative examples too
