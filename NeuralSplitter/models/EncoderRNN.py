@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,35 +8,57 @@ from models.baseRNN import BaseRNN
 from string_preprocess import get_mask
 
 
+class MAB(nn.Module):
+    def __init__(self, dim_Q, dim_K, dim_V, num_heads, ln=False):
+        super(MAB, self).__init__()
+        self.dim_V = dim_V
+        self.num_heads = num_heads
+        self.fc_q = nn.Linear(dim_Q, dim_V)
+        self.fc_k = nn.Linear(dim_K, dim_V)
+        self.fc_v = nn.Linear(dim_K, dim_V)
+        if ln:
+            self.ln0 = nn.LayerNorm(dim_V)
+            self.ln1 = nn.LayerNorm(dim_V)
+        self.fc_o = nn.Linear(dim_V, dim_V)
+
+    def forward(self, Q, K):
+        Q = self.fc_q(Q)
+        K, V = self.fc_k(K), self.fc_v(K)
+
+        dim_split = self.dim_V // self.num_heads
+        Q_ = torch.cat(Q.split(dim_split, 2), 0)
+        K_ = torch.cat(K.split(dim_split, 2), 0)
+        V_ = torch.cat(V.split(dim_split, 2), 0)
+
+        A = torch.softmax(Q_.bmm(K_.transpose(1, 2)) / math.sqrt(self.dim_V), 2)
+        O = torch.cat((Q_ + A.bmm(V_)).split(Q.size(0), 0), 2)
+        O = O if getattr(self, "ln0", None) is None else self.ln0(O)
+        O = O + F.relu(self.fc_o(O))
+        O = O if getattr(self, "ln1", None) is None else self.ln1(O)
+        return O
+
+
+class SAB(nn.Module):
+    def __init__(self, dim_in, dim_out, num_heads, ln=False):
+        super(SAB, self).__init__()
+        self.mab = MAB(dim_in, dim_in, dim_out, num_heads, ln=ln)
+
+    def forward(self, X):
+        return self.mab(X, X)
+
+
+class PMA(nn.Module):
+    def __init__(self, dim, num_heads, num_seeds, ln=False):
+        super(PMA, self).__init__()
+        self.S = nn.Parameter(torch.Tensor(1, num_seeds, dim))
+        nn.init.xavier_uniform_(self.S)
+        self.mab = MAB(dim, dim, dim, num_heads, ln=ln)
+
+    def forward(self, X):
+        return self.mab(self.S.repeat(X.size(0), 1, 1), X)
+
+
 class EncoderRNN(BaseRNN):
-    r"""
-    Applies a multi-layer RNN to an input sequence.
-
-    Args:
-        vocab_size (int): size of the vocabulary
-        max_len (int): a maximum allowed length for the sequence to be processed
-        hidden_size (int): the number of features in the hidden state `h`
-        input_dropout_p (float, optional): dropout probability for the input sequence (default: 0)
-        dropout_p (float, optional): dropout probability for the output sequence (default: 0)
-        n_layers (int, optional): number of recurrent layers (default: 1)
-        bidirectional (bool, optional): if True, becomes a bidirectional encodr (defulat False)
-        rnn_cell (str, optional): type of RNN cell (default: gru)
-        variable_lengths (bool, optional): if use variable length RNN (default: False)
-        embedding (torch.Tensor, optional): Pre-trained embedding.  The size of the tensor has to match
-            the size of the embedding parameter: (vocab_size, hidden_size).  The embedding layer would be initialized
-            with the tensor if provided (default: None).
-        update_embedding (bool, optional): If the embedding should be updated during training (default: False).
-
-    Inputs: inputs, input_lengths
-        - **inputs**: list of sequences, whose length is the batch size and within which each sequence is a list of token IDs.
-        - **input_lengths** (list of int, optional): list that contains the lengths of sequences
-            in the mini-batch, it must be provided when using variable length RNN (default: `None`)
-
-    Outputs: output, hidden
-        - **output** (batch, seq_len, hidden_size): tensor containing the encoded features of the input sequence
-        - **hidden** (num_layers * num_directions, batch, hidden_size): tensor containing the features in the hidden state `h`
-    """
-
     def __init__(
         self,
         vocab_size,
@@ -47,68 +71,160 @@ class EncoderRNN(BaseRNN):
         rnn_cell="LSTM",
         variable_lengths=False,
         vocab=None,
+        set_transformer=False,
     ):
         super().__init__(vocab_size, max_len, hidden_size, input_dropout_p, dropout_p, n_layers, rnn_cell)
 
-        self.vocab_size = vocab_size
-        self.embed_size = 4
+        self.set_transformer = set_transformer
 
+        self.vocab_size = vocab_size
         self.variable_lengths = variable_lengths
         self.vocab = vocab
         self.bidirectional = bidirectional
         self.hidden_size = hidden_size
         self.input_dropout_p = input_dropout_p
         self.n_layers = n_layers
+        self.n_directions = 2 if self.bidirectional else 1
+
         self.rnn1 = self.rnn_cell(
             self.vocab_size,
             hidden_size,
             n_layers,
             batch_first=True,
             bidirectional=bidirectional,
-            # dropout=dropout_p,
         )
 
-        self.rnn2 = self.rnn_cell(
-            hidden_size * 2 if self.bidirectional else hidden_size,
-            hidden_size,
-            n_layers,
-            batch_first=True,
-            bidirectional=bidirectional,
-            dropout=dropout_p,
-        )
+        if set_transformer:
+            self.encoder_1 = nn.Sequential(
+                SAB(dim_in=hidden_size * 2, dim_out=hidden_size * 2, num_heads=4, ln=True),
+                SAB(dim_in=hidden_size * 2, dim_out=hidden_size * 2, num_heads=4, ln=True),
+            )
+            self.decoder_1 = nn.Sequential(
+                PMA(dim=hidden_size * 2, num_heads=4, num_seeds=1, ln=True),
+                nn.Linear(
+                    in_features=hidden_size * 2,
+                    out_features=hidden_size * 2,
+                ),
+            )
+        else:
+            self.rnn2 = self.rnn_cell(
+                hidden_size * 2 if self.bidirectional else hidden_size,
+                hidden_size,
+                n_layers,
+                batch_first=True,
+                bidirectional=bidirectional,
+                dropout=dropout_p,
+            )
 
-    def forward(self, input_var, input_lengths=None, embedding=None):
-        batch_size, set_size, seq_len = input_var.size(0), input_var.size(1), input_var.size(2)
-        one_hot = F.one_hot(input_var.to(device="cuda"), num_classes=self.vocab_size)
-        src_embedded = one_hot.view(batch_size * set_size, seq_len, -1).float()
+        self.hidden_linear = nn.Linear(self.hidden_size * 4, self.hidden_size * 2)
+        self.cell_linear = nn.Linear(self.hidden_size * 4, self.hidden_size * 2)
 
-        masking = get_mask(input_var)  # batch, set_size, seq_len
+        self.pos_out_norm = nn.LayerNorm(self.hidden_size * 2)
+        self.pos_hidden_norm = nn.LayerNorm(self.hidden_size)
+        self.pos_cell_norm = nn.LayerNorm(self.hidden_size)
 
-        src_output, src_hidden = self.rnn1(src_embedded)  # (batch x set_size, seq_len, hidden), # (num_layer x num_dir, batch*set_size, hidden)
+        self.set_out_norm = nn.LayerNorm(self.hidden_size * 2)
+        self.set_hidden_norm = nn.LayerNorm(self.hidden_size * 2)
+        self.set_cell_norm = nn.LayerNorm(self.hidden_size * 2)
 
-        rnn1_hidden = src_hidden
+    def _cat_directions(self, h):
+        """If the encoder is bidirectional, do the following transformation.
+        (#directions * #layers, #batch, hidden_size) -> (#layers, #batch, #directions * hidden_size)
+        """
+        if self.bidirectional:
+            h = torch.cat([h[0 : h.size(0) : 2], h[1 : h.size(0) : 2]], 2)
+        return h
 
-        src_output = src_output.view(batch_size, set_size, seq_len, -1)  # batch, set_size, seq_len, hidden)
+    def forward(self, pos):
+        batch_size, n_examples, example_max_len = pos.shape
+
+        masking = get_mask(pos)
+
+        pos = F.one_hot(pos.to(device="cuda"), num_classes=self.vocab_size).view(batch_size * n_examples, example_max_len, self.vocab_size).float()
+
+        pos_output, pos_hidden = self.rnn1(pos)
+        pos_output = self.pos_out_norm(pos_output)
+        if type(self.rnn1) is nn.LSTM:
+            pos_cell = self.pos_cell_norm(pos_hidden[1])
+            pos_hidden = self.pos_hidden_norm(pos_hidden[0])
+            pos_hidden = (pos_hidden, pos_cell)
+        else:
+            pos_hidden = self.pos_hidden_norm(pos_hidden)
+
+        pos_output = pos_output.view(batch_size, n_examples, example_max_len, self.hidden_size * 2)
 
         if type(self.rnn1) is nn.LSTM:
-            src_single_hidden = src_hidden[0].view(self.n_layers, -1, batch_size * set_size, self.hidden_size)  # num_layer(2), num_direction, batch x set_size, hidden
+            pos_set = pos_hidden[0].view(self.n_layers, self.n_directions, batch_size * n_examples, self.hidden_size)
         else:
-            src_single_hidden = src_hidden.view(self.n_layers, -1, batch_size * set_size, self.hidden_size)  # num_layer(2), num_direction, batch x set_size, hidden
-
-        # use hidden state of final_layer
-        set_embedded = src_single_hidden[-1, :, :, :]  # num_direction, batch x set_size, hidden
+            pos_set = pos_hidden.view(self.n_layers, self.n_directions, batch_size * n_examples, self.hidden_size)
+        pos_set = pos_set[-1, :, :, :]
 
         if self.bidirectional:
-            set_embedded = torch.cat((set_embedded[0], set_embedded[1]), dim=-1)  # batch x set_size, num_direction x hidden
+            pos_set = torch.cat((pos_set[0], pos_set[1]), dim=-1)
         else:
-            set_embedded = set_embedded.squeeze(0)  # batch x set_size, hidden
+            pos_set = pos_set.squeeze(0)
 
-        set_embedded = set_embedded.view(batch_size, set_size, -1)  # batch, set_size, hidden
+        pos_set = pos_set.view(batch_size, n_examples, self.hidden_size * 2)
 
-        set_output, set_hidden = self.rnn2(set_embedded)  # (batch, set_size, hidden), # (num_layer*num_dir, batch, hidden) 2개 tuple 구성
+        if self.set_transformer:
+            set_output = self.encoder_1(pos_set)
+            set_hidden = self.decoder_1(set_output)
+        else:
+            set_output, set_hidden = self.rnn2(pos_set)
 
-        hiddens = set_hidden
+        set_output = self.set_out_norm(set_output)
 
-        outputs = (src_output, set_output)
+        if self.set_transformer:
+            if type(self.rnn1) is nn.LSTM:
+                pos_cell = self._cat_directions(pos_hidden[1])
+                pos_hidden = self._cat_directions(pos_hidden[0])
 
-        return outputs, hiddens, masking, rnn1_hidden
+                set_hidden = set_hidden.squeeze(1).unsqueeze(0).repeat_interleave(self.n_directions, dim=0).repeat_interleave(10, dim=1)
+                set_cell = torch.zeros_like(set_hidden)
+
+                set_hidden = self.set_hidden_norm(set_hidden)
+                set_cell = self.set_cell_norm(set_cell)
+
+                hidden = torch.cat((pos_hidden, set_hidden), dim=-1)
+                cell = torch.cat((pos_cell, set_cell), dim=-1)
+
+                hidden = self.hidden_linear(hidden)
+                cell = self.cell_linear(cell)
+
+                hidden = (hidden, cell)
+            else:
+                pos_hidden = self._cat_directions(pos_hidden)
+                set_hidden = set_hidden.squeeze(1).unsqueeze(0).repeat_interleave(self.n_directions, dim=0).repeat_interleave(10, dim=1)
+                set_hidden = self.set_hidden_norm(set_hidden)
+                hidden = torch.cat((pos_hidden, set_hidden), dim=-1)
+                hidden = self.hidden_linear(hidden)
+
+        elif type(self.rnn1) is nn.LSTM:
+            pos_cell = self._cat_directions(pos_hidden[1])
+            pos_hidden = self._cat_directions(pos_hidden[0])
+            set_cell = self._cat_directions(set_hidden[1]).repeat_interleave(10, dim=1)
+            set_hidden = self._cat_directions(set_hidden[0]).repeat_interleave(10, dim=1)
+
+            hidden = torch.cat((pos_hidden, set_hidden), dim=-1)
+            cell = torch.cat((pos_cell, set_cell), dim=-1)
+
+            hidden = self.hidden_linear(hidden)
+            cell = self.cell_linear(cell)
+
+            hidden = (hidden, cell)
+        else:
+            pos_hidden = self._cat_directions(pos_hidden)
+            set_hidden = self._cat_directions(set_hidden).repeat_interleave(10, dim=1)
+            hidden = torch.cat((pos_hidden, set_hidden), dim=-1)
+            hidden = self.hidden_linear(hidden)
+
+        outputs = (pos_output, set_output)
+        hiddens = hidden
+        masking = masking
+
+        # pos_output: batch_size, n_examples, example_max_len, self.hidden_size * 2
+        # set_output: batch_size, n_exampels, self.hidden_size * 2
+        # hidden: n_layers, batch_size * n_exampels, self.hidden_size * 2
+        # masking: batch_size, n_examples, example_max_len
+
+        return outputs, hiddens, masking

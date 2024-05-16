@@ -90,14 +90,17 @@ class NLLLoss(Loss):
 
     _NAME = "Avg NLLLoss"
 
-    def __init__(self, weight=None, mask=None, reduction="mean"):
+    def __init__(self, weight=None, mask=None, reduction="mean", ignore_index=None):
         self.mask = mask
         self.reduction = reduction
         if mask is not None:
             if weight is None:
                 raise ValueError("Must provide weight with a mask.")
             weight[mask] = 0
-        super().__init__(self._NAME, nn.NLLLoss(weight=weight, reduction=self.reduction))
+        if ignore_index is not None:
+            super().__init__(self._NAME, nn.NLLLoss(weight=weight, reduction=self.reduction, ignore_index=ignore_index))
+        else:
+            super().__init__(self._NAME, nn.NLLLoss(weight=weight, reduction=self.reduction))
 
     def get_loss(self):
         if isinstance(self.acc_loss, int):
@@ -110,5 +113,6 @@ class NLLLoss(Loss):
         return loss
 
     def eval_batch(self, outputs, target):
-        self.acc_loss += self.criterion(outputs, target)
+        loss = self.criterion(outputs, target)
+        self.acc_loss += loss
         self.norm_term += 1

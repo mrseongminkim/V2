@@ -11,15 +11,7 @@ from supervised_trainer import SupervisedTrainer
 from loss import NLLLoss
 from optim import Optimizer
 from seed import seed_all
-from models import EncoderRNN, DecoderRNN, Seq2seq, EncoderRNNST, DecoderRNNST
-
-# Sample usage:
-#     # Training
-#       python NeuralSplitter/train.py --train_path $TRAIN_PATH --dev_path $DEV_PATH --expt_dir $EXPT_PATH
-#     # Resuming from the latest checkpoint of the experiment
-#       python NeuralSplitter/train.py --train_path $TRAIN_PATH --dev_path $DEV_PATH --expt_dir $EXPT_PATH --resume
-#     # Resuming from a specific checkpoint
-#       python NeuralSplitter/train.py --train_path $TRAIN_PATH --dev_path $DEV_PATH --expt_dir $EXPT_PATH --load_checkpoint $CHECKPOINT_DIR
+from models import EncoderRNN, DecoderRNN, Seq2seq
 
 parser = argparse.ArgumentParser()
 # data setting
@@ -94,7 +86,7 @@ parser.add_argument(
     "--weight_decay",
     action="store",
     dest="weight_decay",
-    default=0.000001,
+    default=0.0,
     type=float,
     help="Specify the weight decay hyperparameter for L2 regularization.",
 )
@@ -107,10 +99,9 @@ parser.add_argument(
     help="Specify the batch size.",
 )
 parser.add_argument(
-    "--gru",
-    action="store_true",
-    dest="gru",
-    default=False,
+    "--rnn_cell",
+    action="store",
+    dest="rnn_cell",
     help="Specify whether to use GRU cell for RNN. If not specified, LSTM will be used by default.",
 )
 parser.add_argument(
@@ -188,15 +179,16 @@ valid_path = opt.valid_path
 batch_size = opt.batch_size
 max_len = 10 if "random" in opt.train_path else 15
 
-train = dataset.get_loader(train_path, batch_size, shuffle=True, max_len=max_len)
-dev = dataset.get_loader(valid_path, batch_size, shuffle=False, max_len=max_len)
+train = dataset.get_data_loader(train_path, usage="train", batch_size=batch_size, shuffle=True, example_max_len=max_len)
+dev = dataset.get_data_loader(valid_path, usage="train", batch_size=batch_size, shuffle=False, example_max_len=max_len)
 
 input_vocab = train.dataset.vocab
 output_vocab = train.dataset.vocab
+padding_index = input_vocab.stoi["<pad>"]
 
-rnn_cell = "gru" if opt.gru else "lstm"
-
+rnn_cell = opt.rnn_cell
 loss = NLLLoss()
+# loss = NLLLoss(ignore_index=padding_index)
 if torch.cuda.is_available():
     loss.cuda()
 
@@ -207,31 +199,29 @@ hidden_size = opt.hidden_size
 n_layers = opt.num_layer
 bidirectional = opt.bidirectional
 bi = "2" if bidirectional else "1"
-expt_dir = opt.expt_dir + "/lr=Truebr=True{}_{}_{}_{}".format(rnn_cell, hidden_size, n_layers, opt.set_transformer)
+expt_dir = opt.expt_dir + "/layer_norm_trainloss_{}_{}_{}_{}".format(rnn_cell, hidden_size, n_layers, opt.set_transformer)
 
-if opt.set_transformer:
-    encoder = EncoderRNNST
-    decoder = DecoderRNNST
-else:
-    encoder = EncoderRNN
-    decoder = DecoderRNN
+set_transformer = opt.set_transformer
+encoder = EncoderRNN
+decoder = DecoderRNN
 
 if not opt.resume:
     encoder = encoder(
-        len(input_vocab),
-        int(config["data"]["num_examples"]),
-        hidden_size,
+        vocab_size=len(input_vocab),
+        max_len=int(config["data"]["num_examples"]),
+        hidden_size=hidden_size,
         dropout_p=opt.dropout_en,
         input_dropout_p=0.0,
         bidirectional=bidirectional,
         n_layers=n_layers,
         rnn_cell=rnn_cell,
         variable_lengths=True,
+        set_transformer=set_transformer,
     )
     decoder = decoder(
-        len(input_vocab),
-        int(config["data"]["num_examples"]),
-        hidden_size * (2 if bidirectional else 1),
+        vocab_size=len(input_vocab),
+        max_len=int(config["data"]["num_examples"]),
+        hidden_size=hidden_size * (2 if bidirectional else 1),
         dropout_p=opt.dropout_de,
         input_dropout_p=0.0,
         use_attention=True,
@@ -250,10 +240,9 @@ if not opt.resume:
 
     optimizer = Optimizer(
         torch.optim.Adam(s2smodel.parameters(), lr=opt.lr),
-        # torch.optim.Adam(s2smodel.parameters(), lr=opt.lr, weight_decay=opt.weight_decay),
-        max_grad_norm=0,
+        max_grad_norm=0,  # 1, 3, 5, 8, 10
     )
-    scheduler = ReduceLROnPlateau(optimizer.optimizer, "min", factor=0.1, verbose=True, patience=15)
+    scheduler = ReduceLROnPlateau(optimizer.optimizer, "min", factor=0.1, patience=10)
     optimizer.set_scheduler(scheduler)
 
 t = SupervisedTrainer(

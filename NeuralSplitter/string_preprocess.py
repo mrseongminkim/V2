@@ -76,9 +76,7 @@ def preprocessing(input_var, none_idx):
     processed_input = []
     set_size_in_batch = []
     input_var = torch.split(input_var, input_var.size(0), dim=0)
-    none_idx_within_batch = [
-        (input_var[0][idx] == none_idx).nonzero() for idx in range(len(input_var[0]))
-    ]
+    none_idx_within_batch = [(input_var[0][idx] == none_idx).nonzero() for idx in range(len(input_var[0]))]
 
     for minibatch, idx in zip(input_var[0], none_idx_within_batch):
         if len(idx) == 0:
@@ -99,7 +97,7 @@ def get_set_lengths(input_var):
 
 
 def get_mask(inputs):
-    # 왜 1을 mask하는 거지?
+    # padding index is 1
     masking = torch.eq(inputs, 1)
     return masking
 

@@ -2,7 +2,6 @@ import numpy as np
 
 
 class EarlyStopping:
-    # 여기도 loss 기준인데 왜 acc_set으로 사용했을까?
     """Early stops the training if validation loss doesn't improve after a given patience."""
 
     def __init__(self, patience=7, verbose=False, delta=0, path="checkpoint.pt"):
@@ -26,9 +25,7 @@ class EarlyStopping:
         self.delta = delta
         self.path = path
 
-    def __call__(
-        self, val_loss, model, optimizer, epoch, step, input_vocab, output_vocab, expt_dir
-    ):
+    def __call__(self, val_loss, model, optimizer, epoch, step, input_vocab, output_vocab, expt_dir):
 
         score = val_loss
 

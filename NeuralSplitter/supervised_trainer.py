@@ -2,7 +2,6 @@ import logging
 import os
 import random
 import time
-from collections import Counter
 
 import torch
 import numpy as np
@@ -79,17 +78,11 @@ class SupervisedTrainer:
 
         self.logger = logging.getLogger(__name__)
 
-    def _train_batch(self, input_variable, input_lengths, target_variable, regex, model, teacher_forcing_ratio):
+    def _train_batch(self, input_variable, input_lengths, target_variable, model, teacher_forcing_ratio):
         loss = self.loss
-        # decoder_outputs: max_len * (batch_size * num_examples) * vocab_size
-        # other.sequence = max_len * (batch * num_examples)
-        decoder_outputs, decoder_hidden, other = model(
-            input_variable,
-            self.max_sequence_length,
-            teacher_forcing_ratio=teacher_forcing_ratio,
-        )
 
-        # target_variable: (batch_size * num_examples) * max_len
+        decoder_outputs, decoder_hidden, other = model(input_variable)
+
         target_variable = target_variable.contiguous().view(-1, self.max_sequence_length)
 
         # Get loss
@@ -108,34 +101,26 @@ class SupervisedTrainer:
         for step, step_output in enumerate(decoder_outputs):
             batch_size = target_variable.size(0)  # batch_size * num_examples
             target = target_variable[:, step].to(device="cuda")
+
             loss.eval_batch(step_output.contiguous().view(batch_size, -1), target)
 
             if step == 0:
-                # nth example을 (batch * max_len)
-                # match_seq은 그러면 같은 것들이 나오게 되겠네 - True or False
                 match_seq = seqlist[step].view(-1).eq(target).unsqueeze(-1)
             else:
                 match_seq = torch.cat((match_seq, seqlist[step].view(-1).eq(target).unsqueeze(-1)), dim=1)
 
-            # 계속 concat해 나간다.
-
             non_padding = target.ne(vocab.stoi["<pad>"])
-            # padding이 아닌 것들 mask
-            # self.match = 예측한 것과 타겟이 맞아 떨어진 경우 순서도 확인한다.
+
             self.match += seqlist[step].view(-1).eq(target).masked_select(non_padding).sum().item()
-            # 전체 예측해야할 것들의 개수
+
             self.total += non_padding.sum().item()
 
-        # target_variable.eq(pad)를 하니 pad가 아니면 모두 False
-        # match_seq은 모든 example에 대해서 레이블과 같은지 다른지를 나타냄
         result = torch.logical_or(match_seq, target_variable.eq(vocab.stoi["<pad>"]).to(device="cuda"))
-        # result = (batch * max_len) * num_example
-        # 맞은 example의 개수를 센다.
+
         self.match_seqnum += [example.all() for example in result].count(True)
 
         tmp = list_chunk([example.all() for example in result], 10)
 
-        # 하나의 레겍스에 해당하는 모든 exmaple이 모두 참이라면 match_setnum이되는 것같다.
         self.match_setnum += [all(example) for example in tmp].count(True)
 
         # Backward propagation
@@ -178,16 +163,15 @@ class SupervisedTrainer:
             train_losses = []
             epoch_loss_total = 0
 
-            for inputs, outputs, regex in data:
+            for pos, label in data:
                 step += 1
                 step_elapsed += 1
-                self.total_data_size += inputs.size(0)
+                self.total_data_size += pos.size(0)
 
                 loss = self._train_batch(
-                    inputs.to(device="cuda"),
+                    pos.to(device="cuda"),
                     self.max_sequence_length,
-                    outputs,
-                    regex,
+                    label,
                     model,
                     teacher_forcing_ratio,
                 )
@@ -212,15 +196,7 @@ class SupervisedTrainer:
                 continue
 
             epoch_loss_avg = epoch_loss_total / min(steps_per_epoch, step - start_step)
-            """
-            self.match: 예측값과 타겟이 같은 경우
-            self.total: 예측해야 하는 총량
-            accuracyT: 예측값이 맞은 비율
 
-            self.match_seqnum: example의 max_len이 모두 맞은 경우
-            self.total_data_size * 10: 각 레겍스마다 10개의 example이 있으니까
-            acc_seqT: example이 맞은 비율
-            """
             accuracyT = self.match / self.total  # token wise
             acc_seqT = self.match_seqnum / (self.total_data_size * 10)  # example wise
             acc_setT = self.match_setnum / self.total_data_size  # regex wise
@@ -236,8 +212,6 @@ class SupervisedTrainer:
                 dev_loss, accuracy, acc_seq, acc_set = self.evaluator.evaluate(model, dev_data)
                 avg_valid_losses.append(dev_loss)
                 valid_log = "Dev %s: %.4f, Accuracy: %.4f, Accuracy of seq: %.4f, Accuracy of set: %.4f" % (self.loss.name, dev_loss, accuracy, acc_seq, acc_set)
-                # set accuracy 기준으로 early stopping이 작동한다.
-                # 왜?
                 early_stopping(
                     acc_set,
                     model,
@@ -248,23 +222,7 @@ class SupervisedTrainer:
                     self.output_vocab,
                     self.expt_dir,
                 )
-                # loss 기준으로 optimizer를 update한다.
-                self.optimizer.update(dev_loss, epoch)
-                # 원래는 acc_set이 높은 것을 저장했네요.
-                # 지금은 그냥 한 epoch 마다 저장한다.
-                # 어쨌든 valid의 accuracy를 기준으로 저장한다.
-
-                # if acc_set > best_acc:
-                #     log.info('acc_set increased >> best_accuracy{}, current_accuracy{}'.format(accuracy, best_acc))
-
-                #     if os.path.exists(self.expt_dir +'/best_accuracy'):
-                #         shutil.rmtree(self.expt_dir +'/best_accuracy')
-                #     Checkpoint(model=model,
-                #                optimizer=self.optimizer,
-                #                epoch=epoch, step=step,
-                #                input_vocab=self.input_vocab,
-                #                output_vocab=self.output_vocab).save(self.expt_dir +'/best_accuracy', acc_seq, acc_set, epoch_loss_avg, dev_loss, start_time-time.time())
-                #     best_acc = acc_set
+                self.optimizer.update(epoch_loss_avg, epoch)
                 Checkpoint(
                     model=model,
                     optimizer=self.optimizer,
@@ -282,7 +240,7 @@ class SupervisedTrainer:
                 )
                 model.train(mode=True)
             else:
-                self.optimizer.update(epoch_loss_avg, epoch)
+                self.optimizer.update(acc_setT, epoch)
 
             if early_stopping.early_stop:
                 print("Early Stopping")

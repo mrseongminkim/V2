@@ -26,8 +26,7 @@ python NeuralSplitter/train.py \
     --expt_dir $expt_dir \
     --hidden_size 256 \
     --num_layer 2 \
-    --batch_size 512 \
-    --gpu_idx 1 \
+    --batch_size 256 \
+    --gpu_idx 3 \
+    --rnn_cell gru \
     --set_transformer \
-    --gru \
-    --lr 0.0001 \

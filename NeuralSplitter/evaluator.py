@@ -47,11 +47,11 @@ class Evaluator:
         vocab = Vocabulary()
 
         with torch.no_grad():
-            for inputs, outputs, regex in data:
-                total_data_size += inputs.size(0)
+            for pos, label in data:
+                total_data_size += pos.size(0)
 
-                decoder_outputs, decoder_hidden, other = model(inputs.to("cuda"), None, outputs)
-                tgt_variables = outputs.contiguous().view(-1, self.max_sequence_length)
+                decoder_outputs, decoder_hidden, other = model(pos.to("cuda"))
+                tgt_variables = label.contiguous().view(-1, self.max_sequence_length)
 
                 # answer_dict = [dict(Counter(l)) for l in tgt_variables.tolist()]
 
@@ -69,19 +69,13 @@ class Evaluator:
                     if step == 0:
                         match_seq = seqlist[step].view(-1).eq(target).unsqueeze(-1)
                     else:
-                        match_seq = torch.cat(
-                            (match_seq, seqlist[step].view(-1).eq(target).unsqueeze(-1)), dim=1
-                        )
+                        match_seq = torch.cat((match_seq, seqlist[step].view(-1).eq(target).unsqueeze(-1)), dim=1)
 
                     non_padding = target.ne(vocab.stoi["<pad>"])
-                    match += (
-                        seqlist[step].view(-1).eq(target).masked_select(non_padding).sum().item()
-                    )
+                    match += seqlist[step].view(-1).eq(target).masked_select(non_padding).sum().item()
                     total += non_padding.sum().item()
 
-                result = torch.logical_or(
-                    match_seq, tgt_variables.eq(vocab.stoi["<pad>"]).to(device="cuda")
-                )
+                result = torch.logical_or(match_seq, tgt_variables.eq(vocab.stoi["<pad>"]).to(device="cuda"))
                 match_seqnum += [example.all() for example in result].count(True)
 
                 tmp = list_chunk([example.all() for example in result], 10)
