@@ -115,7 +115,7 @@ parser.add_argument(
     "--use_attn",
     action="store_true",
     dest="use_attn",
-    default=True,
+    default=False,
     help="Specify whether to use attention mechanism",
 )
 parser.add_argument(
@@ -177,6 +177,7 @@ torch.cuda.set_device(device)
 train_path = opt.train_path
 valid_path = opt.valid_path
 batch_size = opt.batch_size
+use_attn = opt.use_attn
 max_len = 10 if "random" in opt.train_path else 15
 
 train = dataset.get_data_loader(train_path, usage="train", batch_size=batch_size, shuffle=True, example_max_len=max_len)
@@ -199,7 +200,7 @@ hidden_size = opt.hidden_size
 n_layers = opt.num_layer
 bidirectional = opt.bidirectional
 bi = "2" if bidirectional else "1"
-expt_dir = opt.expt_dir + "/2_layer_norm_trainloss_{}_{}_{}_{}".format(rnn_cell, hidden_size, n_layers, opt.set_transformer)
+expt_dir = opt.expt_dir + "/no_attention_{}_{}_{}_{}".format(rnn_cell, hidden_size, n_layers, opt.set_transformer)
 
 set_transformer = opt.set_transformer
 encoder = EncoderRNN
@@ -224,7 +225,7 @@ if not opt.resume:
         hidden_size=hidden_size * (2 if bidirectional else 1),
         dropout_p=opt.dropout_de,
         input_dropout_p=0.0,
-        use_attention=True,
+        use_attention=use_attn,
         bidirectional=bidirectional,
         rnn_cell=rnn_cell,
         n_layers=n_layers,

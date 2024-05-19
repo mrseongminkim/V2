@@ -64,6 +64,7 @@ class DecoderRNN(BaseRNN):
 
         attn = None
         if self.use_attention:
+            print("nope never")
             self.attention.set_mask(self.masking)
             output, attn = self.attention(output, encoder_outputs)
 

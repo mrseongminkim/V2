@@ -1,8 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models import EncoderRNN
-
 
 class Seq2seq(nn.Module):
     """Standard sequence-to-sequence architecture with configurable encoder
@@ -48,7 +46,6 @@ class Seq2seq(nn.Module):
         self.decoder.rnn.flatten_parameters()
 
     def forward(self, input_variable):
-
         encoder_outputs, encoder_hidden, masking = self.encoder(input_variable)
 
         result = self.decoder(

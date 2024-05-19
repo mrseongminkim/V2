@@ -222,7 +222,7 @@ class SupervisedTrainer:
                     self.output_vocab,
                     self.expt_dir,
                 )
-                self.optimizer.update(epoch_loss_avg, epoch)
+                self.optimizer.update(dev_loss, epoch)
                 Checkpoint(
                     model=model,
                     optimizer=self.optimizer,
