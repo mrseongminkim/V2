@@ -106,6 +106,17 @@ class EncoderRNN(BaseRNN):
                     out_features=hidden_size * 2,
                 ),
             )
+            self.encoder_2 = nn.Sequential(
+                SAB(dim_in=hidden_size * 2, dim_out=hidden_size * 2, num_heads=4, ln=True),
+                SAB(dim_in=hidden_size * 2, dim_out=hidden_size * 2, num_heads=4, ln=True),
+            )
+            self.decoder_2 = nn.Sequential(
+                PMA(dim=hidden_size * 2, num_heads=4, num_seeds=1, ln=True),
+                nn.Linear(
+                    in_features=hidden_size * 2,
+                    out_features=hidden_size * 2,
+                ),
+            )
         else:
             self.rnn2 = self.rnn_cell(
                 hidden_size * 2 if self.bidirectional else hidden_size,
@@ -167,8 +178,13 @@ class EncoderRNN(BaseRNN):
         pos_set = pos_set.view(batch_size, n_examples, self.hidden_size * 2)
 
         if self.set_transformer:
-            set_output = self.encoder_1(pos_set)
-            set_hidden = self.decoder_1(set_output)
+            set_output_1 = self.encoder_1(pos_set)
+            set_hidden_1 = self.decoder_1(set_output_1).squeeze(1)
+            set_output_2 = self.encoder_2(set_output_1)
+            set_hidden_2 = self.decoder_2(set_output_2).squeeze(1)
+
+            set_output = set_output_2  # output only contains last layer output
+            set_hidden = torch.stack((set_hidden_1, set_hidden_2))
         else:
             set_output, set_hidden = self.rnn2(pos_set)
 
@@ -179,7 +195,7 @@ class EncoderRNN(BaseRNN):
                 pos_cell = self._cat_directions(pos_hidden[1])
                 pos_hidden = self._cat_directions(pos_hidden[0])
 
-                set_hidden = set_hidden.squeeze(1).unsqueeze(0).repeat_interleave(self.n_directions, dim=0).repeat_interleave(10, dim=1)
+                set_hidden = set_hidden.repeat_interleave(10, dim=1)
                 set_cell = torch.zeros_like(set_hidden)
 
                 set_hidden = self.set_hidden_norm(set_hidden)
@@ -194,7 +210,7 @@ class EncoderRNN(BaseRNN):
                 hidden = (hidden, cell)
             else:
                 pos_hidden = self._cat_directions(pos_hidden)
-                set_hidden = set_hidden.squeeze(1).unsqueeze(0).repeat_interleave(self.n_directions, dim=0).repeat_interleave(10, dim=1)
+                set_hidden = set_hidden.repeat_interleave(10, dim=1)
                 set_hidden = self.set_hidden_norm(set_hidden)
                 hidden = torch.cat((pos_hidden, set_hidden), dim=-1)
                 hidden = self.hidden_linear(hidden)
