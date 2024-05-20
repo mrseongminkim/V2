@@ -1,4 +1,3 @@
-import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
@@ -30,7 +29,6 @@ class DecoderRNN(BaseRNN):
 
         self.bidirectional_encoder = bidirectional
 
-        # self.rnn = self.rnn_cell(hidden_size, hidden_size*2, n_layers, batch_first=True, dropout=dropout_p)
         self.rnn = self.rnn_cell(vocab_size, hidden_size, n_layers, batch_first=True, dropout=dropout_p)
         self.output_size = vocab_size
         self.max_length = max_len
@@ -44,9 +42,6 @@ class DecoderRNN(BaseRNN):
             self.attention = Attention(self.hidden_size, attn_mode)
 
         self.out = nn.Linear(self.hidden_size, self.output_size)
-        self.output_norm = nn.LayerNorm(self.hidden_size)
-        self.hidden_norm = nn.LayerNorm(self.hidden_size)
-        self.cell_norm = nn.LayerNorm(self.hidden_size)
 
     def forward_step(self, pos, hidden, encoder_outputs, function):
         batch_size, n_examples, example_max_len = pos.shape
@@ -54,14 +49,6 @@ class DecoderRNN(BaseRNN):
         pos = F.one_hot(pos.to(device="cuda"), num_classes=self.vocab_size).view(batch_size * n_examples, example_max_len, self.vocab_size).float()
 
         output, hidden = self.rnn(pos, hidden)
-
-        output = self.output_norm(output)
-        if type(self.rnn) is nn.LSTM:
-            cell = self.cell_norm(hidden[1])
-            hidden = self.hidden_norm(hidden[0])
-            hidden = (hidden, cell)
-        else:
-            hidden = self.hidden_norm(hidden)
 
         attn = None
         if self.use_attention:

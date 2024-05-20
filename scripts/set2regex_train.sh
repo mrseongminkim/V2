@@ -27,10 +27,10 @@ python set2regex/train.py \
     --hidden_size 256 \
     --num_layer 2 \
     --batch_size 512 \
-    --gpu_idx 1 \
+    --gpu_idx 0 \
     --rnn_cell lstm \
-    --set_transformer \
     #--attn_mode \
+    #--set_transformer \
 
 # if attn_mode true
 # it attend on negative examples too

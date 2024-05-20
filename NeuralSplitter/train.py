@@ -200,7 +200,7 @@ hidden_size = opt.hidden_size
 n_layers = opt.num_layer
 bidirectional = opt.bidirectional
 bi = "2" if bidirectional else "1"
-expt_dir = opt.expt_dir + "/no_attention_{}_{}_{}_{}".format(rnn_cell, hidden_size, n_layers, opt.set_transformer)
+expt_dir = opt.expt_dir + "/{}_{}_{}_{}".format(rnn_cell, hidden_size, n_layers, opt.set_transformer)
 
 set_transformer = opt.set_transformer
 encoder = EncoderRNN

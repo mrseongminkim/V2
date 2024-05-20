@@ -17,7 +17,7 @@ elif [ $1 == "random" ]; then
 elif [ $1 == "debug" ]; then
     train_file_path=$debug
     valid_file_path=$debug
-    expt_dir="saved_models/practical"
+    expt_dir="saved_models/debug"
 fi
 
 python NeuralSplitter/train.py \
@@ -26,8 +26,8 @@ python NeuralSplitter/train.py \
     --expt_dir $expt_dir \
     --hidden_size 256 \
     --num_layer 2 \
-    --batch_size 256 \
+    --batch_size 512 \
     --use_attn \
     --gpu_idx 3 \
     --rnn_cell gru \
-    #--set_transformer \
+    --set_transformer \

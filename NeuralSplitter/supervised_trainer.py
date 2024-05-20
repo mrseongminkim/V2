@@ -240,15 +240,15 @@ class SupervisedTrainer:
                 )
                 model.train(mode=True)
             else:
-                self.optimizer.update(acc_setT, epoch)
-
-            if early_stopping.early_stop:
-                print("Early Stopping")
-                break
+                self.optimizer.update(dev_loss, epoch)
 
             log.info("Finished epoch %d:" % epoch)
             log.info(train_log)
             log.info(valid_log)
+
+            if early_stopping.early_stop:
+                print("Early Stopping")
+                break
         return avg_train_losses, avg_valid_losses
 
     def train(
