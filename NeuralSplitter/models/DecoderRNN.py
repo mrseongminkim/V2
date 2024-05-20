@@ -54,6 +54,7 @@ class DecoderRNN(BaseRNN):
         pos = F.one_hot(pos.to(device="cuda"), num_classes=self.vocab_size).view(batch_size * n_examples, example_max_len, self.vocab_size).float()
 
         output, hidden = self.rnn(pos, hidden)
+
         output = self.output_norm(output)
         if type(self.rnn) is nn.LSTM:
             cell = self.cell_norm(hidden[1])
@@ -64,7 +65,6 @@ class DecoderRNN(BaseRNN):
 
         attn = None
         if self.use_attention:
-            print("nope never")
             self.attention.set_mask(self.masking)
             output, attn = self.attention(output, encoder_outputs)
 
@@ -106,7 +106,7 @@ class DecoderRNN(BaseRNN):
                 if self.attn_mode:
                     step_attn = ((attn[0][0][:, di, :, :], attn[0][1][:, di, :, :]), (attn[1][0][:, di, :], attn[1][1][:, di, :]))
                 else:
-                    step_attn = (attn[0][:, di, :], attn[1][:, di, :])
+                    step_attn = attn[:, di, :]
             else:
                 step_attn = None
             decode(di, step_output, step_attn)

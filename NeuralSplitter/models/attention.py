@@ -9,7 +9,7 @@ class Attention(nn.Module):
         self.mask = None
         self.attn_mode = attn_mode  # True (attention both pos and neg) # False (attention only pos samples)
         # dim = hidden_dim * 2
-        self.linear_out = nn.Linear(dim * 3, dim)
+        self.linear_out = nn.Linear(dim * 2, dim)
         self.dim = dim
 
     def set_mask(self, mask):
@@ -30,18 +30,16 @@ class Attention(nn.Module):
     def forward(self, output, context):
         batch_by_n_examples, example_max_len, hidden_size = output.shape
         self.mask = self.mask.view(batch_by_n_examples, example_max_len).unsqueeze(1)
-        example_context = context[0].view(batch_by_n_examples, example_max_len, hidden_size)
-        set_context = context[1].repeat_interleave(10, dim=0)
+
+        example_context = context.view(batch_by_n_examples, example_max_len, hidden_size)
 
         example_attention = self.example_attention(output, example_context)
-        set_attention = self.set_attention(output, set_context)
 
         example_context = torch.bmm(example_attention, example_context)
-        set_context = torch.bmm(set_attention, set_context)
 
-        all_the_information = torch.cat((output, example_context, set_context), dim=-1)
+        all_the_information = torch.cat((output, example_context), dim=-1)
         output = torch.tanh(self.linear_out(all_the_information))
 
-        attn = (example_attention, set_attention)
+        attn = example_attention
 
         return output, attn
