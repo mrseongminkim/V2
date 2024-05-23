@@ -95,9 +95,11 @@ class EncoderRNN(BaseRNN):
         )
 
         if set_transformer:
-            self.rnn2 = nn.Sequential(
+            self.st_encoder = nn.Sequential(
                 SAB(dim_in=hidden_size * 2, dim_out=hidden_size * 2, num_heads=8, ln=True),
                 SAB(dim_in=hidden_size * 2, dim_out=hidden_size * 2, num_heads=8, ln=True),
+            )
+            self.st_decoder = nn.Sequential(
                 PMA(dim=hidden_size * 2, num_heads=8, num_seeds=1, ln=True),
                 nn.Linear(
                     in_features=hidden_size * 2,
@@ -150,7 +152,8 @@ class EncoderRNN(BaseRNN):
         pos_set = pos_set.view(batch_size, n_examples, self.hidden_size * 2)
 
         if self.set_transformer:
-            set_hidden = self.rnn2(pos_set).squeeze(1).unsqueeze(0).repeat_interleave(2, dim=0).repeat_interleave(10, dim=1)
+            set_output = self.st_encoder(pos_set)
+            set_hidden = self.st_decoder(set_output).squeeze(1).unsqueeze(0).repeat_interleave(2, dim=0).repeat_interleave(10, dim=1)
             if type(self.rnn1) is nn.LSTM:
                 set_cell = torch.zeros_like(set_hidden)
 
@@ -170,7 +173,7 @@ class EncoderRNN(BaseRNN):
                 hidden = torch.cat((pos_hidden, set_hidden), dim=-1)
                 hidden = self.hidden_linear(hidden)
         else:
-            _, set_hidden = self.rnn2(pos_set)
+            set_output, set_hidden = self.rnn2(pos_set)
             if type(self.rnn1) is nn.LSTM:
                 set_cell = self._cat_directions(set_hidden[1]).repeat_interleave(10, dim=1)
                 set_hidden = self._cat_directions(set_hidden[0]).repeat_interleave(10, dim=1)
@@ -194,7 +197,7 @@ class EncoderRNN(BaseRNN):
 
                 hidden = self.hidden_linear(hidden)
 
-        outputs = pos_output
+        outputs = (pos_output, set_output)
         hiddens = hidden
         masking = masking
 

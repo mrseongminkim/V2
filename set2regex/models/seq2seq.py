@@ -1,8 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models import EncoderRNN
-
 
 class Seq2seq(nn.Module):
     def __init__(self, encoder, decoder, decode_function=F.log_softmax):

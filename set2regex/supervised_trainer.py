@@ -93,7 +93,7 @@ class SupervisedTrainer(object):
                 step += 1
                 step_elapsed += 1
 
-                loss = self._train_batch(pos, neg, regex, model, teacher_forcing_ratio)
+                loss = self._train_batch(pos.cuda(), neg.cuda(), regex.cuda(), model, teacher_forcing_ratio)
 
                 train_losses.append(loss)
                 print_loss_total += loss
@@ -121,7 +121,7 @@ class SupervisedTrainer(object):
                 dev_loss, accuracy = self.evaluator.evaluate(model, dev_data)
                 avg_valid_losses.append(dev_loss)
                 log_msg += ", Dev %s: %.4f, Accuracy: %.4f" % (self.loss.name, dev_loss, accuracy)
-                early_stopping(dev_loss, model, self.optimizer, epoch, step, self.input_vocab, self.output_vocab, self.expt_dir)
+                early_stopping(accuracy, model, self.optimizer, epoch, step, self.input_vocab, self.output_vocab, self.expt_dir)
                 self.optimizer.update(dev_loss, epoch)
                 if accuracy > best_acc:
                     log.info("accuracy increased >> best_accuracy: {:.2f}, current_accuracy: {:.2f}".format(accuracy, best_acc))

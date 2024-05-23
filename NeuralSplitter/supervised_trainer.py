@@ -164,6 +164,10 @@ class SupervisedTrainer:
             epoch_loss_total = 0
 
             for pos, label in data:
+                randperm = torch.randperm(10)
+                pos = pos[:, randperm]
+                label = label[:, randperm]
+
                 step += 1
                 step_elapsed += 1
                 self.total_data_size += pos.size(0)

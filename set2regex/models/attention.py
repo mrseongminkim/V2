@@ -66,7 +66,7 @@ class Attention(nn.Module):
         set_size = encoder_hiddens.size(1)
         enc_len = encoder_hiddens.size(2)
         dec_len = dec_hidden.size(1)
-        encoder_hiddens_temp = encoder_hiddens.view(batch_size, set_size * enc_len, -1)
+        encoder_hiddens_temp = encoder_hiddens.reshape(batch_size, set_size * enc_len, -1)
         encoder_hiddens_temp = encoder_hiddens_temp.transpose(1, 2)
         attn = torch.bmm(dec_hidden, encoder_hiddens_temp)
         attn = attn.view(batch_size, -1, set_size, enc_len)

@@ -12,6 +12,8 @@ class Attention(nn.Module):
         self.linear_out = nn.Linear(dim * 2, dim)
         self.dim = dim
 
+        self.set_linear = nn.Linear(dim * 2, dim)
+
     def set_mask(self, mask):
         self.mask = mask
 
@@ -29,17 +31,23 @@ class Attention(nn.Module):
 
     def forward(self, output, context):
         batch_by_n_examples, example_max_len, hidden_size = output.shape
-        self.mask = self.mask.view(batch_by_n_examples, example_max_len).unsqueeze(1)
+        batch, n_examples = self.mask.size(0), self.mask.size(1)
 
-        example_context = context.view(batch_by_n_examples, example_max_len, hidden_size)
+        set_output = context[1].repeat_interleave(10, dim=0)
+        set_attention = self.set_attention(output, set_output)
+        set_context = torch.bmm(set_attention, set_output)
+        output_with_set_info = torch.cat((output, set_context), dim=-1)
+        output = torch.tanh(self.set_linear(output_with_set_info))
 
-        example_attention = self.example_attention(output, example_context)
+        output = output.view(batch, n_examples * example_max_len, hidden_size)
+        self.mask = self.mask.view(batch, n_examples * example_max_len).unsqueeze(-1)
 
-        example_context = torch.bmm(example_attention, example_context)
+        example_output = context[0].reshape(batch, n_examples * example_max_len, hidden_size)
+        example_attention = self.example_attention(output, example_output)
+        example_context = torch.bmm(example_attention, example_output)
+        output_with_example_info = torch.cat((output, example_context), dim=-1)
+        output = torch.tanh(self.linear_out(output_with_example_info))
 
-        all_the_information = torch.cat((output, example_context), dim=-1)
-        output = torch.tanh(self.linear_out(all_the_information))
-
-        attn = example_attention
+        attn = (example_attention, set_attention)
 
         return output, attn

@@ -93,7 +93,7 @@ class DecoderRNN(BaseRNN):
                 if self.attn_mode:
                     step_attn = ((attn[0][0][:, di, :, :], attn[0][1][:, di, :, :]), (attn[1][0][:, di, :], attn[1][1][:, di, :]))
                 else:
-                    step_attn = attn[:, di, :]
+                    step_attn = (attn[0][:, di, :], attn[1][:, di, :])
             else:
                 step_attn = None
             decode(di, step_output, step_attn)

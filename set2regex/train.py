@@ -207,7 +207,7 @@ n_layers = opt.num_layer
 bidirectional = opt.bidirectional
 attn_mode = opt.attn_mode
 bi = "2" if bidirectional else "1"
-expt_dir = opt.expt_dir + f"/{rnn_cell}_{hidden_size}_{n_layers}_{opt.set_transformer}"
+expt_dir = opt.expt_dir + f"/{rnn_cell}_{hidden_size}_{n_layers}_{attn_mode}"
 
 set_transformer = opt.set_transformer
 encoder = EncoderRNN

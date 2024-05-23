@@ -29,7 +29,7 @@ python set2regex/train.py \
     --batch_size 512 \
     --gpu_idx 0 \
     --rnn_cell lstm \
-    #--attn_mode \
+    --attn_mode \
     #--set_transformer \
 
 # if attn_mode true

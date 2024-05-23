@@ -48,9 +48,6 @@ class DecoderRNN(BaseRNN):
             self.attention = Attention(self.hidden_size, attn_mode)
 
         self.out = nn.Linear(self.hidden_size, self.output_size)
-        self.output_norm = nn.LayerNorm(self.hidden_size)
-        self.hidden_norm = nn.LayerNorm(self.hidden_size)
-        self.cell_norm = nn.LayerNorm(self.hidden_size)
 
     def forward_step(self, regex, hidden, encoder_outputs, function):
         batch_size, regex_max_len = regex.shape
@@ -58,14 +55,6 @@ class DecoderRNN(BaseRNN):
         regex = F.one_hot(regex.to(device="cuda"), num_classes=self.vocab_size).float()
 
         output, hidden = self.rnn(regex, hidden)
-        output = self.output_norm(output)
-        if type(self.rnn) is nn.LSTM:
-            cell = self.cell_norm(hidden[1])
-            hidden = self.hidden_norm(hidden[0])
-            hidden = (hidden, cell)
-        else:
-            hidden = self.hidden_norm(hidden)
-
         attn = None
         if self.use_attention:
             self.attention.set_mask(self.masking)

@@ -30,4 +30,4 @@ python NeuralSplitter/train.py \
     --use_attn \
     --gpu_idx 3 \
     --rnn_cell gru \
-    --set_transformer \
+    #--set_transformer \
