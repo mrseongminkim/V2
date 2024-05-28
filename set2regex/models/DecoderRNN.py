@@ -5,7 +5,6 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.attention import Attention
 from models.baseRNN import BaseRNN
 
 
@@ -38,14 +37,15 @@ class DecoderRNN(BaseRNN):
 
         self.output_size = vocab_size
         self.max_length = max_len
-        self.use_attention = use_attention
+        # self.use_attention = use_attention
         self.attn_mode = attn_mode
 
         self.init_input = None
         self.masking = None
         self.input_dropout_p = input_dropout_p
-        if use_attention:
-            self.attention = Attention(self.hidden_size, attn_mode)
+        self.attention = use_attention
+        # if use_attention:
+        #    self.attention = Attention(self.hidden_size, attn_mode)
 
         self.out = nn.Linear(self.hidden_size, self.output_size)
 
@@ -56,17 +56,15 @@ class DecoderRNN(BaseRNN):
 
         output, hidden = self.rnn(regex, hidden)
         attn = None
-        if self.use_attention:
-            self.attention.set_mask(self.masking)
-            output, attn = self.attention(output, encoder_outputs)
+        self.attention.set_mask(self.masking)
+        output, attn = self.attention(output, encoder_outputs)
 
         predicted_softmax = function(self.out(output.contiguous().view(-1, self.hidden_size)), dim=1).view(batch_size, regex_max_len, -1)
         return predicted_softmax, hidden, attn
 
     def forward(self, inputs=None, encoder_hidden=None, encoder_outputs=None, function=F.log_softmax, masking=None, teacher_forcing_ratio=0.5):
         ret_dict = dict()
-        if self.use_attention:
-            ret_dict[DecoderRNN.KEY_ATTN_SCORE] = list()
+        ret_dict[DecoderRNN.KEY_ATTN_SCORE] = list()
 
         if masking is not None:
             self.masking = masking
@@ -82,8 +80,7 @@ class DecoderRNN(BaseRNN):
 
         def decode(step, step_output, step_attn):
             decoder_outputs.append(step_output)
-            if self.use_attention:
-                ret_dict[DecoderRNN.KEY_ATTN_SCORE].append(step_attn)
+            ret_dict[DecoderRNN.KEY_ATTN_SCORE].append(step_attn)
             symbols = decoder_outputs[-1].topk(1)[1]
             sequence_symbols.append(symbols)
 
@@ -131,9 +128,8 @@ class DecoderRNN(BaseRNN):
         return decoder_outputs, decoder_hidden, ret_dict
 
     def _validate_args(self, inputs, encoder_hidden, encoder_outputs, function, teacher_forcing_ratio):
-        if self.use_attention:
-            if encoder_outputs is None:
-                raise ValueError("Argument encoder_outputs cannot be None when attention is used.")
+        if encoder_outputs is None:
+            raise ValueError("Argument encoder_outputs cannot be None when attention is used.")
 
         # inference batch size
         if inputs is None and encoder_hidden is None:

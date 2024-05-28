@@ -27,7 +27,7 @@ python set2regex/train.py \
     --hidden_size 256 \
     --num_layer 2 \
     --batch_size 512 \
-    --gpu_idx 0 \
+    --gpu_idx 3 \
     --rnn_cell lstm \
     --attn_mode \
     #--set_transformer \

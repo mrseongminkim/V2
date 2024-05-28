@@ -5,8 +5,6 @@ import shutil
 import torch
 import dill
 
-from models.seq2seq import *
-
 
 class Checkpoint:
     """
@@ -107,6 +105,7 @@ class Checkpoint:
         if torch.cuda.is_available():
             resume_checkpoint = torch.load(os.path.join(path, cls.TRAINER_STATE_NAME), map_location="cuda:0")
             model = torch.load(os.path.join(path, cls.MODEL_NAME), map_location="cuda:0")
+            return model.state_dict()
         else:
             resume_checkpoint = torch.load(
                 os.path.join(path, cls.TRAINER_STATE_NAME),

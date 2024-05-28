@@ -206,23 +206,39 @@ def main():
     writer = csv.writer(save_file)
     regex_list = [x.strip() for x in regex_file.readlines()]
     error_idx = []
+    unique_regex_idx = set()
+    max_len = -float("inf")
+
+    save_file = open(f"preprocessed_regex/{data_name}.csv", "w")
+    writer = csv.writer(save_file)
+    regex_set = set()
+
     for idx, regex in enumerate(regex_list):
         # Pre-preprocess
         if data_name == "regexlib-clean":
             pass
         elif data_name[:-3] == "practical_regexes":
             regex = regex[1:-1]
+            # practical_regexes store regex as repr format thus we need to change \\ to single \
+            regex = regex.replace("\\\\", "\\")
         elif data_name == "snort-clean":
             regex = regex[1 : regex.rfind("/")]
         try:
             ast = sre_parse.parse(regex)
-            regex = preprocess_regex(ast)
+            generatable = [False, 1]
+            regex, generatable = preprocess_regex(ast, is_root=True, generatable=generatable)
+            if generatable:
+                regex_set.add(regex)
         except AssertionError as e:
             error_idx.append(idx)
             continue
+
         except Exception as e:
             error_idx.append(idx)
             continue
+
+        continue
+
         try:
             for _ in range(AUGMENTATION_RATIO):
                 substituted_regex, pos, substitutions = make_pos(regex, xeger)
@@ -239,6 +255,9 @@ def main():
                 labelled_pos = label
 
                 writer.writerow([train_pos, valid_pos, train_neg, valid_neg, labelled_pos, subregex_list])
+                unique_regex_idx.add(idx)
+                set2regex_goal = "".join(subregex_list)
+                max_len = max(max_len, len(set2regex_goal))
 
         except PredictableException:
             error_idx.append(idx)
@@ -246,10 +265,21 @@ def main():
         except Exception as e:
             error_idx.append(idx)
             continue
+    # print(regex_set)
+    for regex in regex_set:
+        save_file.write(regex + "\n")
+    # save_file.writelines(regex_set)
+    exit()
+
     save_file.close()
-    print("data_name:", data_name)
-    print("error count :", len(error_idx))
-    print("total len:", len(regex_list))
+    log = {
+        "data_name": data_name,
+        "error count": len(error_idx),
+        "total regex": len(regex_list),
+        "unique regex": len(unique_regex_idx),
+        "max regex len": max_len,
+    }
+    print(log)
 
 
 if __name__ == "__main__":

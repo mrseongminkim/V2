@@ -38,7 +38,7 @@ def get_symbol(argument: int) -> str:
     return symbol
 
 
-def preprocess_regex(ast: List[tuple], is_root: bool = True) -> str:
+def preprocess_regex(ast: List[tuple], is_root: bool = True, generatable=[False, 1]) -> str:
     regex = "("
     prev_opcode = None
     for opcode, argument in ast:
@@ -55,11 +55,12 @@ def preprocess_regex(ast: List[tuple], is_root: bool = True) -> str:
             regex += symbol
         elif opcode in REPEAT:
             min, max, argument = argument
-            sub_regex = preprocess_regex(argument, is_root=False)
+            sub_regex = preprocess_regex(argument, is_root=False, generatable=generatable)
             if min == 0 and max == 1:
                 operator = "?"
             else:
                 operator = "*"
+                generatable[0] = True
             if sub_regex[-1] == operator:
                 operator = ""
             if is_root:
@@ -67,6 +68,7 @@ def preprocess_regex(ast: List[tuple], is_root: bool = True) -> str:
             else:
                 return sub_regex + operator
         elif opcode == sre_parse.IN:
+            generatable[0] = True
             # Negation always comes first
             assert argument[0][0] not in NEGATION
             # Categories
@@ -107,13 +109,14 @@ def preprocess_regex(ast: List[tuple], is_root: bool = True) -> str:
             else:
                 return character_class
         elif opcode == sre_parse.ANY:
+            generatable[0] = True
             if is_root:
                 regex += "."
             else:
                 return "."
         elif opcode == sre_parse.SUBPATTERN:
             group, add_flags, del_flags, argument = argument
-            sub_regex = preprocess_regex(argument, is_root=False)
+            sub_regex = preprocess_regex(argument, is_root=False, generatable=generatable)
             if is_root:
                 regex += sub_regex
             else:
@@ -123,7 +126,7 @@ def preprocess_regex(ast: List[tuple], is_root: bool = True) -> str:
             sub_regex_set = set()
             _, argument = argument
             for sub_pattern in argument:
-                temp = preprocess_regex(sub_pattern, is_root=False)
+                temp = preprocess_regex(sub_pattern, is_root=False, generatable=generatable)
                 if temp == "()":
                     continue
                 elif temp == ".*":
@@ -132,6 +135,9 @@ def preprocess_regex(ast: List[tuple], is_root: bool = True) -> str:
                 else:
                     sub_regex_set.add(temp)
             if sub_regex == "":
+                generatable[1] *= len(sub_regex_set)
+                if generatable[1] >= 10:
+                    generatable[0] = True
                 sub_regex = "|".join(sub_regex_set)
             sub_regex = "(" + sub_regex + ")"
             if is_root:
@@ -141,4 +147,4 @@ def preprocess_regex(ast: List[tuple], is_root: bool = True) -> str:
         else:
             print(opcode)
             exit()
-    return regex + ")"
+    return regex + ")", generatable[0]

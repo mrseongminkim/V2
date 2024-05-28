@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # $1: [snort | lib | practical | 2 | 4 | 6 | 8 | 10]
-# $2: [ar | bf | rg]
+# $2: [ar | bf | rg | sr]
 time_limit=3
 
 if [ $1 == "snort" ]; then
@@ -9,13 +9,13 @@ if [ $1 == "snort" ]; then
     log_path="./log_data/snort/"
     checkpoint_pos="./saved_models/practical/gru__256__2__2"
     data_type="practical"
-    num=100
+    num=1646
 elif [ $1 == "lib" ]; then
     data_path="./data/practical_data/integrated/test_regexlib.csv"
     log_path="./log_data/regexlib/"
     checkpoint_pos="./saved_models/practical/gru__256__2__2"
     data_type="practical"
-    num=500
+    num=3000
 elif [ $1 == "practical" ]; then
     data_path="./data/practical_data/integrated/test_practicalregex.csv"
     log_path="./log_data/practicalregex/"
@@ -40,6 +40,9 @@ elif [ $2 == "bf" ]; then
 elif [ $2 == "rg" ]; then
     log_path+="regex_generator"
     sub_model="regex_generator"
+elif [ $2 == "sr" ]; then
+    log_path+="set2regex"
+    sub_model="set2regex"
 else
     sub_model="error"
 fi

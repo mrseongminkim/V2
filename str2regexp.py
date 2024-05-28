@@ -2,8 +2,7 @@ import string
 import lark
 from FAdo.reex import RegExp, BuildRegexp
 
-# 33 + 1
-punctuation = string.printable[-38:-6]
+punctuation = string.printable[-38:-5]
 idx = 128
 p2s = {}
 s2p = {}

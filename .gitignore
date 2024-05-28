@@ -6,3 +6,4 @@ data/*
 log_data/*
 outputs*/
 inputs/
+preprocessed_regex/

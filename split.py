@@ -1,4 +1,4 @@
-from multiprocessing import Process, Manager
+from multiprocessing import Process
 from collections import Counter
 
 import torch
@@ -16,67 +16,103 @@ from rpni import synthesis as rpni_synthesis
 
 from str2regexp import *
 
+from set2regex.checkpoint import Checkpoint
+from set2regex.models import Seq2seq, EncoderRNN, DecoderRNN, attention
+
+vocab = Vocabulary()
+
+random_encoder = EncoderRNN(
+    vocab_size=len(vocab),
+    max_len=10,
+    hidden_size=256,
+    dropout_p=0,
+    input_dropout_p=0,
+    bidirectional=True,
+    n_layers=2,
+    rnn_cell="lstm",
+    variable_lengths=False,
+    set_transformer=False,
+)
+practical_encoder = EncoderRNN(
+    vocab_size=len(vocab),
+    max_len=15,
+    hidden_size=256,
+    dropout_p=0,
+    input_dropout_p=0,
+    bidirectional=True,
+    n_layers=2,
+    rnn_cell="lstm",
+    variable_lengths=False,
+    set_transformer=False,
+)
+atten = attention.Attention(256 * 2, True)
+decoder = DecoderRNN(
+    vocab_size=len(vocab),
+    max_len=100,
+    hidden_size=256 * 2,
+    dropout_p=0,
+    input_dropout_p=0,
+    use_attention=atten,
+    bidirectional=True,
+    n_layers=2,
+    rnn_cell="lstm",
+    attn_mode=True,
+)
+
+random_pt = Checkpoint.load(Checkpoint.get_latest_checkpoint("./saved_models/set2regex/random/lstm_256_2_True"))
+random_set2regex = Seq2seq(random_encoder, decoder)
+random_set2regex = random_set2regex.cuda()
+random_set2regex.load_state_dict(random_pt)
+random_set2regex.eval()
+
+practical_pt = Checkpoint.load(Checkpoint.get_latest_checkpoint("./saved_models/set2regex/practical/lstm_256_2_True"))
+practical_set2regex = Seq2seq(practical_encoder, decoder)
+practical_set2regex = practical_set2regex.cuda()
+practical_set2regex.load_state_dict(practical_pt)
+practical_set2regex.eval()
+
+special_symbols = "/.+*?^$()[]{}|\\"
+
+
+def bf_escape(strings: list) -> list:
+    processed_string = []
+    for string in strings:
+        temp: str = string
+        for punct in p2s.keys():
+            temp = temp.replace(punct, p2s[punct])
+        processed_string.append(temp)
+    return processed_string
+
 
 class TimeOutException(Exception):
     pass
 
 
-class Ex:
-    def __init__(self, pos, neg):
-        self.pos = pos
-        self.neg = neg
-
-    def __str__(self):
-        print(self.pos, self.neg)
-
-
-def is_last_sigma(lst, split_size):
+def is_last_sigma(lst: list, split_size):
     try:
-        # idx = len(lst) - 1: 마지막 원소
-        # list(reversed(lst)).index(split_size) 마지막 subregex의 인덱스 left most가 반환됨
-        idx = len(lst) - 1 - list(reversed(lst)).index(split_size)
+        lst = lst[: lst.index(1)]
+    except:
+        pass
+    split_size = vocab.stoi[str(split_size)]
+    max_example_len = len(lst)
+    try:
+        idx = max_example_len - 1 - list(reversed(lst)).index(split_size)
     except:
         return False
-    # 이건 random을 기준으로 만들어진 것 같다.
-    if idx != 9 and lst[idx + 1] == 0:
+    if idx != max_example_len - 1:
         return True
+    else:
+        return False
 
 
-org2RG = {
-    "A": "\.",
-    "B": ":",
-    "C": ",",
-    "D": ";",
-    "E": "_",
-    "F": "=",
-    "G": "[",
-    "H": "]",
-    "I": "/",
-    "J": "\?",
-    "K": "\!",
-    "L": "\{",
-    "M": "\}",
-    "N": "\(",
-    "O": "\)",
-    "P": "\<",
-}
-RG2org = {v: k for k, v in org2RG.items()}
+def sub_bf_esacpe(x):
+    x = vocab.itos[x]
+    if x in p2s.keys():
+        x = p2s[x]
+    return x
 
 
-# change original string to RG formed string
-def get_org2RG(string):
-    for k, v in org2RG.items():
-        string = string.replace(k, v)
-    return string
-
-
-def get_RG2org(string):
-    for k, v in RG2org.items():
-        string = string.replace(k, v)
-    return string
-
-
-def split(strings, label, no_split=False):
+def split(strings, label, no_split=False, need_bf_escape=False):
     vocab = Vocabulary()
     splited_string = []
     # 그냥 padding이나 unk만 없애줌
@@ -86,62 +122,64 @@ def split(strings, label, no_split=False):
             set = []
             for set_idx in range(10):
                 seq = []
-                seq.append(
-                    "".join(
-                        map(
-                            lambda x: vocab.itos[x],
-                            [x for x in strings[batch_idx, set_idx] if x != vocab.stoi["<pad>"]],
+                if need_bf_escape:
+                    seq.append(
+                        "".join(
+                            map(
+                                sub_bf_esacpe,
+                                [x for x in strings[batch_idx, set_idx] if x != vocab.stoi["<pad>"]],
+                            )
                         )
                     )
-                )
+                else:
+                    seq.append(
+                        "".join(
+                            map(
+                                lambda x: vocab.itos[x],
+                                [x for x in strings[batch_idx, set_idx] if x != vocab.stoi["<pad>"]],
+                            )
+                        )
+                    )
                 set.append(seq)
             splited_string.append(set)
         return splited_string, None
 
     label = [i.tolist() for i in label]
     tmp = torch.LongTensor(label).transpose(0, 1).squeeze(-1).tolist()
-    # examples * max_len
-    # 각각이 어느 subregex에 속하는지 표시한다.
+    # tmp: n_examples * example_max_len
 
-    # 서브 레겍스가 몇 개 존재하는지 확인하기 위해서 <pad>를 제외한 가장 큰 인덱스를 찾는다.
-    # unique한 원소의 개수를 세는 것이 더 정확할 것 같습니다 ㅎㅎ
     split_size = torch.tensor(label)[torch.tensor(label) != vocab.stoi["<pad>"]].max().item()
+    split_size = vocab.itos[split_size]
+    split_size = int(split_size, 16)
 
-    # x: 하나의 max_len sequence; 하나의 example
-    # split_size: 몇 개의 regex가 있는지 (잘못됨)
-    # 맨 마지막이 sigma star면 0이니까 카운터가 증가하지 않는다. -> 하나를 증가시켜준다.
-    # 이 코드 자체도 문제가 있다.
-    # 뭐 어쨌든... 이런 상황이 안 흔하니까....
-    # 일단 보자
     if any(map(lambda x: is_last_sigma(x, split_size), tmp)):
         split_size += 1
 
     label2 = []
     sigma_lst = []
-    # 각 example을 본다.
-    # label2 몇번째 레겍스에서 나온건지 알려준다.
-    # 정확히는 0번에 대해서 정규화를 진행해줌; 0번의 위치?
+    # each example
     for templete in tmp:
         tmp2 = []
         sigma_lst2 = []
         now = 0
-        # 각 subregex index를 본다.
+        # each index
         for element in templete:
-            if element != 0:
-                if now != element and element != vocab.stoi["<pad>"]:
+            if element == vocab.stoi["<pad>"]:
+                break
+            # Not sigma
+            if element != vocab.stoi["0"]:
+                element = vocab.itos[element]
+                element = int(element, 16)
+                if now != element:
                     for _ in range(element - len(sigma_lst2)):
                         sigma_lst2.append(False)
                 tmp2.append(element)
                 now = element
             else:
-                # sigma star로 생성됨
-                # 이건 뭘까?
-                # 빈 리스트거나 마지막이 False
-                # 즉 연속된 0을 처리해주는 것
-                # 하나의 연속된 0은 하나로 처리한다.
                 if not sigma_lst2 or not sigma_lst2[-1]:
+                    # sigma_lst2 has same dimension as split_size
                     sigma_lst2.append(True)
-                # now가 증가하지 않고 계속 넣기만 함
+                # tmp2: subregex index
                 tmp2.append(now + 1)
 
         while len(sigma_lst2) < split_size:
@@ -164,9 +202,11 @@ def split(strings, label, no_split=False):
             for seq_id in range(1, split_size + 1):
                 tmp = ""
                 if seq_id in predict_seq_dict.keys():
-                    # 여기 float은 왜 넣은거야...?
                     for _ in range(predict_seq_dict[seq_id]):
-                        tmp += vocab.itos[src_seq[idx]]
+                        if need_bf_escape:
+                            tmp += sub_bf_esacpe(src_seq[idx])
+                        else:
+                            tmp += vocab.itos[src_seq[idx]]
                         idx += 1
                 seq.append(tmp)
             set.append(seq)
@@ -192,22 +232,11 @@ def get_sigma(examples):
 
 
 # for subregex synthesis with baselines
-def generate_regex_with_split_ar(
-    sigma_lst,
-    sub_id,
-    sub_pos_set,
-    sub_neg_set,
-    split_model,
-    count_limit,
-    prefix,
-    alphabet_size,
-    data_type,
-    return_dict,
-):
+def generate_regex_with_split_ar(sigma_lst, sub_id, sub_pos_set, sub_neg_set, split_model, count_limit, prefix, alphabet_size, data_type, return_dict):
     # Singleton
     if len(sub_pos_set) == 1:
         character = sub_pos_set.pop()
-        if character and character in "/.+*?^$()[]{}|\\":
+        if character and character in special_symbols:
             character = "\\" + character
         return_dict[sub_id] = character
         return
@@ -248,19 +277,8 @@ def generate_regex_with_split_ar(
 
 
 def generate_regex_with_split_bf(sub_id, sub_pos_set, sub_neg_set, split_model, count_limit, prefix, alphabet_size, return_dict):
-    def bf_escape(strings: set) -> set:
-        processed_string = set()
-        for string in strings:
-            temp: str = string
-            for punct in p2s.keys():
-                temp = temp.replace(punct, p2s[punct])
-            temp = temp.replace("\x91unk\x93", p2s["<unk>"])
-            if temp:
-                processed_string.add(temp)
-        return processed_string
-
-    sub_pos_set = bf_escape(sub_pos_set)
-    sub_neg_set = bf_escape(sub_neg_set)
+    # sub_pos_set = set(bf_escape(sub_pos_set))
+    # sub_neg_set = bf_escape(sub_neg_set)
 
     if not sub_pos_set:
         return_dict[sub_id] = "@epsilon"
@@ -269,6 +287,7 @@ def generate_regex_with_split_bf(sub_id, sub_pos_set, sub_neg_set, split_model, 
     # Singleton
     if len(sub_pos_set) == 1:
         character = sub_pos_set.pop()
+        # No need to escape since we already map it to hex symbols
         return_dict[sub_id] = character
         return
 
@@ -284,21 +303,20 @@ def generate_regex_with_split_bf(sub_id, sub_pos_set, sub_neg_set, split_model, 
 
 
 def generate_regex_with_split_rg(sigma_lst, sub_id, sub_pos_set, sub_neg_set, return_dict):
+    class Ex:
+        def __init__(self, pos, neg):
+            self.pos = pos
+            self.neg = neg
+
+        def __str__(self):
+            print(self.pos, self.neg)
+
     if len(sub_pos_set) == 1:
         character = sub_pos_set.pop()
-        if character and character in "/.+*?^$()[]{}|\\":
+        if character and character in special_symbols:
             character = "\\" + character
         return_dict[sub_id] = character
         return
-
-    # print(sub_pos_set, sub_neg_set)
-    # new_pos_set = set()
-    # for x in sub_pos_set:
-    #     new_pos_set.add(get_org2RG(x))
-    # new_neg_set = set()
-    # for x in sub_neg_set:
-    #     new_neg_set.add(get_org2RG(x))
-    # print(new_pos_set, new_neg_set)
 
     if sigma_lst is not None and any(list(map(lambda x: x[sub_id], sigma_lst))):
         tmp = get_sigma(Examples(pos=sub_pos_set, neg=sub_neg_set))
@@ -307,13 +325,55 @@ def generate_regex_with_split_rg(sigma_lst, sub_id, sub_pos_set, sub_neg_set, re
     else:
         sub_pos_set = set(filter(None, sub_pos_set))
         sub_neg_set = set(filter(None, sub_neg_set))
-        tmp = execute([Ex(list(sub_pos_set), list(sub_neg_set))])
+        n = randint(0, 999999999)
+        tmp = execute([Ex(list(sub_pos_set), list(sub_neg_set))], input_path=f"./RAM/inputs/{sub_id}/{n}", output_path=f"./RAM/outputs/{sub_id}/{n}")
 
     tmp = str(tmp).replace("++", "+").replace("?+", "+")
 
-    # tmp = get_RG2org(tmp)
-
     return_dict[sub_id] = tmp
+
+
+def generate_regex_with_split_sr(sigma_lst, sub_id, sub_pos_set, sub_neg_set, return_dict, data_type):
+    def translate_examples(examples, data_type):
+        example_max_len = 10 if data_type == "random" else 15
+        translated_examples = []
+        for example in examples:
+            if example == "":
+                translated_example = ["<pad>"] * example_max_len
+            else:
+                translated_example = list(example) + ["<pad>"] * (example_max_len - len(example))
+            translated_examples.append(vocab.lookup_indices(translated_example[:example_max_len]))
+        return torch.tensor(translated_examples)
+
+    if len(sub_pos_set) == 1:
+        character = sub_pos_set.pop()
+        if character and character in special_symbols:
+            character = "\\" + character
+        return_dict[sub_id] = character
+        return
+
+    if sigma_lst is not None and any(list(map(lambda x: x[sub_id], sigma_lst))):
+        tmp = get_sigma(Examples(pos=sub_pos_set, neg=sub_neg_set))
+        return_dict[sub_id] = tmp
+        return
+
+    sub_pos_set = list(sub_pos_set) + [""] * (10 - len(sub_pos_set))
+    sub_pos_set = translate_examples(sub_pos_set, data_type).unsqueeze(0)
+    sub_neg_set = list(sub_neg_set) + [""] * (10 - len(sub_neg_set))
+    sub_neg_set = translate_examples(sub_neg_set, data_type).unsqueeze(0)
+
+    if data_type == "random":
+        model = random_set2regex
+    else:
+        model = practical_set2regex
+
+    _, _, other = model(sub_pos_set.cuda(), sub_neg_set.cuda())
+    seqlist = other["sequence"]
+    regex = torch.stack(seqlist, dim=0).squeeze(-1).squeeze(-1)
+    regex = vocab.lookup_tokens(regex)
+    regex = "".join([x for x in regex if x not in ("<sos>", "<eos>", "<pad>", "<unk>")])
+    # print("regex:", regex)
+    return_dict[sub_id] = regex
 
 
 def generate_split_regex_sequential(
@@ -328,25 +388,26 @@ def generate_split_regex_sequential(
     return_dict=None,
     use_prefix_every=False,
 ):
-    # splited_pos: examples * splites
-    # splited_neg: examples
-    split_size = len(splited_pos[0])
+    is_split = type(splited_pos[0]) is list
+    if is_split:
+        split_size = len(splited_pos[0])
+    else:
+        split_size = 1
 
-    # 빈 example을 찾는다...?
-    splited_pos = list(filter(lambda x: any(x), splited_pos))
-    splited_neg = list(filter(lambda x: any(x), splited_neg))
+    # splited_pos = list(filter(lambda x: any(x), splited_pos))
+    # splited_neg = list(filter(lambda x: any(x), splited_neg))
 
     split_set = []
-    neg = []
-    for set_idx in range(len(splited_neg)):
-        neg.append(splited_neg[set_idx][0])
-    if not neg:
-        neg.append("")
-    for sub_id in range(split_size):
-        pos = []
-        for set_idx in range(len(splited_pos)):
-            pos.append(splited_pos[set_idx][sub_id])
-        split_set.append([set(pos), set(neg)])
+    if is_split:
+        if not splited_neg:
+            splited_neg = [""]
+        for sub_id in range(split_size):
+            pos = []
+            for set_idx in range(len(splited_pos)):
+                pos.append(splited_pos[set_idx][sub_id])
+            split_set.append([set(pos), set(splited_neg)])
+    else:
+        split_set.append([set(splited_pos), set(splited_neg)])
 
     # synthesis one by one
     for sub_id in range(split_size):
@@ -354,7 +415,7 @@ def generate_split_regex_sequential(
         # 마지막 원소거나 매번 프리픽스를 사용한다.
         if sub_id != 0 and (sub_id == split_size - 1 or use_prefix_every):
             # 전 prefix들을 ()로 감싼다.
-            prefix = "(" + ")(".join([return_dict[i] for i in range(sub_id)]) + ")"
+            prefix = "(" + ")(".join([return_dict[i] for i in range(sub_id) if return_dict[i] != ""]) + ")"
         else:
             # neg와 pos가 겹치면 제외한다.
             split_set[sub_id][1] -= split_set[sub_id][0]
@@ -390,10 +451,12 @@ def generate_split_regex_sequential(
             )
         elif submodel == "regex_generator":
             generate_regex_with_split_rg(sigma_lst, sub_id, split_set[sub_id][0], split_set[sub_id][1], return_dict)
+        elif submodel == "set2regex":
+            generate_regex_with_split_sr(sigma_lst, sub_id, split_set[sub_id][0], split_set[sub_id][1], return_dict, data_type)
         else:
             raise Exception("unknown baseline")
 
-    return "(" + ")(".join([return_dict[i] for i in range(split_size)]) + ")", split_size
+    return "(" + ")(".join([return_dict[i] for i in range(split_size) if return_dict[i] != ""]) + ")", split_size
 
 
 def generate_split_regex_in_parallel(

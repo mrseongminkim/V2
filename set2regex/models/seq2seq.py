@@ -15,7 +15,7 @@ class Seq2seq(nn.Module):
             self.encoder.rnn2.flatten_parameters()
         self.decoder.rnn.flatten_parameters()
 
-    def forward(self, pos, neg, regex, teacher_forcing_ratio=0):
+    def forward(self, pos, neg, regex=None, teacher_forcing_ratio=0):
         encoder_outputs, encoder_hidden, masking = self.encoder(pos, neg)
 
         result = self.decoder(

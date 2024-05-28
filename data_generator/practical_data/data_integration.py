@@ -36,8 +36,9 @@ for data_idx, path in enumerate(data_list):
     # regexlib
     elif data_idx == 1:
         test_regexlib_file.writelines(data[:3_000])
-        valid.extend(data[3_000:3_500])
-        train.extend(data[3_500:])
+        data = data[3_000:]
+        valid.extend(data[int(len(data) * 0.9) :])
+        train.extend(data[: int(len(data) * 0.9)])
     else:
         practical.extend(data)
 print("Practical")

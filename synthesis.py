@@ -11,23 +11,20 @@ from multiprocessing import Manager
 # This is why we only save state_dict
 sys.path.insert(0, "./NeuralSplitter")
 
-import torch
 import numpy as np
-import FAdo.reex as reex
 import re2 as re
 
 import NeuralSplitter.dataset as dataset
 from NeuralSplitter.dataset import Vocabulary
 from NeuralSplitter.checkpoint import Checkpoint
 from NeuralSplitter.seed import seed_all
-from NeuralSplitter.models import *
 
 from submodels.SCNF.examples import Examples
 from submodels.SCNF.util import *
 
-from split import generate_split_regex_sequential, generate_split_regex_in_parallel, generate_split_regex_sequential, split
-
 from str2regexp import *
+
+from split import generate_split_regex_sequential, generate_split_regex_in_parallel, generate_split_regex_sequential, split, bf_escape
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -130,6 +127,8 @@ manager = Manager()
 # 서브 프로세스에서 공유되는 dict
 return_dict = manager.dict()
 
+need_bf_escape = opt.sub_model == "blue_fringe" and opt.data_type == "practical"
+
 
 class TimeOutException(Exception):
     pass
@@ -144,36 +143,27 @@ def convert_indices_to_strings(indices):
     # strings may have examples less than indices' due to strings of only <pad>
     strings = []
     vocab = Vocabulary()
-    for i in range(indices.size(0)):
-        string = "".join([vocab.itos[x] for x in indices[i][indices[i] != vocab.stoi["<pad>"]]])
+    for i in range(len(indices)):
+        string = "".join([x for x in vocab.lookup_tokens(indices[i]) if x != "<pad>"])
         if string:
             strings.append(string)
     return strings
 
 
-def divide_and_conquer(model, pos, neg, pos_str, neg_str, idx):
+def divide_and_conquer(model, pos, pos_str, neg_str, idx):
     global dc_correct_count, dc_time_total
     start_time = time.time()
     signal.signal(signal.SIGALRM, alarm_handler)
     signal.alarm(MAX_TIME_LIMIT)
     try:
-        _, _, other = model(pos, MAX_SEQUENCE_LENGTH)
-        # other[sequence]: list안에 max_len개의 example * 1 텐서가 있음
-        # 첫번째 원소부터 time_step이며 텐서의 index는 nth examples
-        # time_step * examples
+        _, _, other = model(pos.cuda())
 
-        # pos: batch * examples * max_len
-        splited_pos, sigma_list = split(pos, other["sequence"])  # batch, set, seq
-        # print(splited_pos)
-        # exit()
-        splited_neg, _ = split(neg, other["sequence"], no_split=True)  # batch, set, seq
-        # splitted_pos: 각 string을 substring으로 나눈다. List of batch * examples * splits
-        # sigma_list: 각 substring이 sigma에서 나온것인지 표시한다. List of batch * examples * splits
-        # splitted_neg: 각 string. List of batch * examples
+        splited_pos, sigma_list = split(pos, other["sequence"], need_bf_escape=need_bf_escape)  # batch, set, seq
+        splited_neg = neg_str
 
         dc_answer, split_size = generate_regex_from_split(
             splited_pos[0],
-            splited_neg[0],
+            splited_neg,
             True,
             COUNT_LIMIT,
             alphabet_size=opt.alphabet_size,
@@ -204,33 +194,24 @@ def divide_and_conquer(model, pos, neg, pos_str, neg_str, idx):
         dc_time_taken = MAX_TIME_LIMIT
     dc_time_total += dc_time_taken
 
-    # print(
-    #    f"{idx}th Generated Regex (via DC): {dc_answer} ({dc_correct}), Time Taken: ",
-    #    dc_time_taken,
-    # )
+    """
+    print(
+        f"{idx}th Generated Regex (via DC): {dc_answer} ({dc_correct}), Time Taken: ",
+        dc_time_taken,
+    )
+    """
+    return dc_correct, dc_time_taken, dc_answer
 
-    return dc_correct, dc_time_taken, dc_answer, other
 
-
-def direct(other, pos, neg, pos_str, neg_str, idx):
+def direct(pos_str, neg_str, idx):
     global direct_correct_count, direct_time_total
     start_time = time.time()
     signal.signal(signal.SIGALRM, alarm_handler)
     signal.alarm(MAX_TIME_LIMIT)
     try:
-        # _, _, other = pos_split_model(pos, None, regex)
-        splited_pos, _ = split(pos, other["sequence"], no_split=True)  # batch, set, seq
-
-        # _, _, other = neg_split_model(neg)
-        splited_neg, _ = split(neg, other["sequence"], no_split=True)  # batch, set, seq
-
-        # print(splited_pos)
-        # print(splited_pos)
-        # exit()
-
         direct_answer, split_size = generate_split_regex_sequential(
-            splited_pos[0],
-            splited_neg[0],
+            pos_str,
+            neg_str,
             False,
             COUNT_LIMIT,
             alphabet_size=opt.alphabet_size,
@@ -267,7 +248,7 @@ def direct(other, pos, neg, pos_str, neg_str, idx):
     return direct_correct, direct_time_taken, direct_answer
 
 
-def ground_truth(other, pos, neg, pos_str, neg_str, tag, idx):
+def ground_truth(pos, pos_str, neg_str, tag, idx):
     global gt_correct_count, gt_time_total
     # via ground truth -----------------------------------------------------------------
     start_time = time.time()
@@ -277,16 +258,13 @@ def ground_truth(other, pos, neg, pos_str, neg_str, tag, idx):
     try:
         gt_answer = None
 
-        splited_pos, sigma_lst = split(pos, np.array(tag, dtype="object").T)  # batch, set, seq
+        splited_pos, sigma_lst = split(pos, np.array(tag, dtype="object").T, need_bf_escape=need_bf_escape)  # batch, set, seq
 
-        # _, _, other = neg_split_model(neg)
-        splited_neg, _ = split(neg, other["sequence"], no_split=True)  # batch, set, seq
-
-        gt_split_size = len(splited_pos[0][0])
+        splited_neg = neg_str
 
         gt_answer, split_size = generate_regex_from_split(
             splited_pos[0],
-            splited_neg[0],
+            splited_neg,
             True,
             COUNT_LIMIT,
             alphabet_size=opt.alphabet_size,
@@ -325,15 +303,15 @@ def ground_truth(other, pos, neg, pos_str, neg_str, tag, idx):
 
 
 # done
-def synthesize_regex(model, pos, neg, pos_str, neg_str, tag, idx):
+def synthesize_regex(model, pos, pos_str, neg_str, tag, idx):
     direct_correct, direct_time_taken, direct_answer = None, None, None
     gt_correct, gt_time_taken, gt_answer = None, None, None
 
-    dc_correct, dc_time_taken, dc_answer, other = divide_and_conquer(model, pos, neg, pos_str, neg_str, idx)
+    dc_correct, dc_time_taken, dc_answer = divide_and_conquer(model, pos, pos_str, neg_str, idx)
     if not opt.exclude_Direct:
-        direct_correct, direct_time_taken, direct_answer = direct(other, pos, neg, pos_str, neg_str, idx)
+        direct_correct, direct_time_taken, direct_answer = direct(pos_str, neg_str, idx)
     if not opt.exclude_GT:
-        gt_correct, gt_time_taken, gt_answer = ground_truth(other, pos, neg, pos_str, neg_str, tag, idx)
+        gt_correct, gt_time_taken, gt_answer = ground_truth(pos, pos_str, neg_str, tag, idx)
     return (
         dc_correct,
         dc_time_taken,
@@ -350,67 +328,37 @@ def synthesize_regex(model, pos, neg, pos_str, neg_str, tag, idx):
 # done
 def main():
     global dc_win, direct_win
-    data = dataset.get_loader(
-        opt.data_path,
+    data = dataset.get_data_loader(
+        file_path=opt.data_path,
+        usage="test",
         batch_size=opt.batch_size,
-        is_test=True,
         shuffle=False,
-        max_len=MAX_SEQUENCE_LENGTH,
+        example_max_len=MAX_SEQUENCE_LENGTH,
     )
-
-    pos_checkpoint = Checkpoint.load(Checkpoint.get_latest_checkpoint(opt.checkpoint_pos))
+    pos_checkpoint = Checkpoint.load(opt.checkpoint_pos)
+    # pos_checkpoint = Checkpoint.load(Checkpoint.get_latest_checkpoint(opt.checkpoint_pos))
     pos_split_model = pos_checkpoint.model
     pos_split_model.eval()
 
     for count, tuple in enumerate(data):
         print(f"{count}/{len(data)}")
         # valid_pos, valid_neg doesn't need vector form
-        pos, neg, subregex_list, valid_pos, valid_neg, label = tuple
+        pos, neg, regex, valid_pos, valid_neg, label = tuple
 
         pos_set = convert_indices_to_strings(pos[0])
-        neg_set = convert_indices_to_strings(neg[0])
-        valid_pos_set = convert_indices_to_strings(valid_pos[0])
-        valid_neg_set = convert_indices_to_strings(valid_neg[0])
+        neg_set = neg[0]  # convert_indices_to_strings(neg[0])
+        valid_pos_set = valid_pos[0]  # convert_indices_to_strings(valid_pos[0])
+        valid_neg_set = valid_neg[0]  # convert_indices_to_strings(valid_neg[0])
 
-        pos_set_origin = pos_set
-
-        if opt.sub_model == "blue_fringe" and opt.data_type == "practical":
-
-            def bf_escape(strings: list) -> list:
-                processed_string = []
-                for string in strings:
-                    temp = string
-                    for punct in p2s.keys():
-                        temp = temp.replace(punct, p2s[punct])
-                    temp = temp.replace("\x91unk\x93", p2s["<unk>"])
-                    if temp:
-                        processed_string.append(temp)
-                return processed_string
-
+        if need_bf_escape:
             pos_set = bf_escape(pos_set)
             neg_set = bf_escape(neg_set)
             valid_pos_set = bf_escape(valid_pos_set)
             valid_neg_set = bf_escape(valid_neg_set)
 
-        # print(pos_set_origin)
-        # print(pos_set)
-        # print(neg_set)
-        # print(valid_pos_set)
-        # print(valid_neg_set)
-
         # empty P set
         if not pos_set:
             continue
-
-        # regex[0]인것으로 보아서 batch size를 늘릴 계획은 없었다.
-        # regex = (batch * num_subregex)
-        regex_string = "".join([f"({subregex})" for subregex in subregex_list[0]])
-
-        # print("-" * 50)
-        # print("Positive Strings:", ", ".join(pos_set))
-        # print("Negative Strings:", ", ".join(neg_set))
-        # print("Target Regex:", regex_string)
-        # print("-" * 50)
 
         (
             dc_correct,
@@ -422,7 +370,7 @@ def main():
             gt_correct,
             gt_time_taken,
             gt_answer,
-        ) = synthesize_regex(pos_split_model, pos, neg, pos_set, neg_set, label, count)
+        ) = synthesize_regex(pos_split_model, pos, pos_set, neg_set, label, count)
 
         # win rate
         if not opt.exclude_Direct:
@@ -436,17 +384,31 @@ def main():
             elif direct_correct:
                 direct_win += 1
 
+        # print("direct answer:", repr(direct_answer))
+        # print("dc answer:", repr(dc_answer))
+        # print("gt_answer:", repr(gt_answer))
+
         if not opt.exclude_Direct:
-            print(f"Divide-and-conquer win rate over Direct: {dc_win / (dc_win + direct_win + 1e-9) * 100:.4f}%, Direct Total Time: {direct_time_total:.4f}, DC Total Time: {dc_time_total:.4f}")
-            print(f"DC Success Ratio: {dc_correct_count / (count + 1) * 100:.4f}%, Direct Success Ratio: {direct_correct_count / (count + 1) * 100:.4f}%")
+            print(f"Divide-and-conquer win rate over Direct: {dc_win / (dc_win + direct_win + 1e-9) * 100:.4f}%")
+            print(f"Direct Total Time: {direct_time_total:.4f}, DC Total Time: {dc_time_total:.4f}, GT Total Time: {gt_time_total:.4f}")
+            print(f"Direct Success Ratio: {direct_correct_count / (count + 1) * 100:.4f}%, DC Success Ratio: {dc_correct_count / (count + 1) * 100:.4f}%, GT Success Ratio: {gt_correct_count / (count + 1) * 100:.4f}%")
             print("-" * 50)
         else:
             print(f"DC Total Time: {dc_time_total:.4f}")
             print(f"DC Success Ratio: {dc_correct_count / (count + 1) * 100:.4f}%")
             print("-" * 50)
 
+        """
+        if not gt_correct:
+            print("Target:", repr(regex[0]))
+            print("dc answer:", repr(gt_answer))
+            print("pos:", pos_set)
+            print("neg:", neg_set)
+            exit()
+        """
+
         log_data = dict()
-        log_data["Target_string"] = regex_string
+        log_data["Target_string"] = regex[0]
         log_data["pos"] = pos_set
         log_data["neg"] = neg_set
         log_data["pos_validation"] = valid_pos_set

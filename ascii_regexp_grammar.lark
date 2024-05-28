@@ -58,7 +58,7 @@
     _TUPLET: "/"
     _USHUFFLET: "!"
 
-    symbol: /[ a-zA-Z0-9\x00-\x06\x80-\x9f]/
+    symbol: /[ a-zA-Z0-9\x00-\x06\x80-\xa0]/
 
     epsilon: "@epsilon"
     emptyset: "@empty_set"
