@@ -29,7 +29,7 @@ class Vocabulary:
         return [self.itos[index] for index in indices]
 
 
-class RegexDataset(Dataset):
+class RegexDataset2(Dataset):
     def __init__(self, file_path, usage="train", example_max_len=10, regex_max_len=100):
         self.usage = usage
         self.example_max_len = example_max_len
@@ -37,7 +37,7 @@ class RegexDataset(Dataset):
 
         self.df = pd.read_csv(
             file_path,
-            names=["pos", "valid_pos", "neg", "valid_neg", "label", "subregex_list"],
+            names=["pos", "neg", "subregex_list"],
             converters={
                 "pos": literal_eval,
                 "valid_pos": literal_eval,
@@ -48,11 +48,8 @@ class RegexDataset(Dataset):
             },
         )
         self.pos = self.df[self.df.columns[0]]
-        self.valid_pos = self.df[self.df.columns[1]]
-        self.neg = self.df[self.df.columns[2]]
-        self.valid_neg = self.df[self.df.columns[3]]
-        self.label = self.df[self.df.columns[4]]
-        self.subregex_list = self.df[self.df.columns[5]]
+        self.neg = self.df[self.df.columns[1]]
+        self.subregex_list = self.df[self.df.columns[2]]
         self.vocab = Vocabulary()
 
     def __len__(self):
@@ -102,7 +99,7 @@ class RegexDataset(Dataset):
 
 
 def get_data_loader(file_path, usage="test", example_max_len=10, regex_max_len=100, batch_size=512, num_worker=0, shuffle=True):
-    dataset = RegexDataset(file_path, usage, example_max_len=example_max_len, regex_max_len=regex_max_len)
+    dataset = RegexDataset2(file_path, usage, example_max_len=example_max_len, regex_max_len=regex_max_len)
     padding_value = dataset.vocab.stoi["<pad>"]
 
     def collate_fn(batch):

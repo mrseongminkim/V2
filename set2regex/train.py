@@ -10,12 +10,12 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
-from NeuralSplitter.dataset import get_data_loader
 from NeuralSplitter.seed import seed_all
 from NeuralSplitter.loss import NLLLoss
 from NeuralSplitter.optim import Optimizer
 
-from models import EncoderRNN, DecoderRNN, Seq2seq
+from dataset import get_data_loader
+from models import EncoderRNN2, DecoderRNN2, Seq2seq2
 from supervised_trainer import SupervisedTrainer
 
 parser = argparse.ArgumentParser()
@@ -210,8 +210,8 @@ bi = "2" if bidirectional else "1"
 expt_dir = opt.expt_dir + f"/{rnn_cell}_{hidden_size}_{n_layers}_{attn_mode}"
 
 set_transformer = opt.set_transformer
-encoder = EncoderRNN
-decoder = DecoderRNN
+encoder = EncoderRNN2
+decoder = DecoderRNN2
 
 if not opt.resume:
     encoder = encoder(
@@ -238,7 +238,7 @@ if not opt.resume:
         n_layers=n_layers,
         attn_mode=opt.attn_mode,
     )
-    s2smodel = Seq2seq(encoder, decoder)
+    s2smodel = Seq2seq2(encoder, decoder)
     if torch.cuda.is_available():
         s2smodel.cuda()
     # All the functions in this module are intended to be used to initialize neural network parameters,

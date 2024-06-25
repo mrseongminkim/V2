@@ -8,17 +8,17 @@ alphabet_size=5
 if [ $1 == "snort" ]; then
     data_path="./data/practical_data/integrated/test_snort.csv"
     log_path="./log_data/snort/"
-    checkpoint_pos="./saved_models/practical/lstm_256_2_False/best_accuracy/checkpoints/2024_05_24_16_47_44"
+    checkpoint_pos="./saved_models/practical/lstm_256_2_False/best_accuracy/checkpoints/2024_05_30_05_34_41"
     data_type="practical"
 elif [ $1 == "lib" ]; then
     data_path="./data/practical_data/integrated/test_regexlib.csv"
     log_path="./log_data/regexlib/"
-    checkpoint_pos="./saved_models/practical/lstm_256_2_False/best_accuracy/checkpoints/2024_05_24_16_47_44"
+    checkpoint_pos="./saved_models/practical/lstm_256_2_False/best_accuracy/checkpoints/2024_05_30_05_34_41"
     data_type="practical"
 elif [ $1 == "practical" ]; then
     data_path="./data/practical_data/integrated/test_practicalregex.csv"
     log_path="./log_data/practicalregex/"
-    checkpoint_pos="./saved_models/practical/lstm_256_2_False/best_accuracy/checkpoints/2024_05_24_16_47_44"
+    checkpoint_pos="./saved_models/practical/lstm_256_2_False/best_accuracy/checkpoints/2024_05_30_05_34_41"
     data_type="practical"
 fi
 case $1 in "2"|"4"|"6"|"8"|"10")

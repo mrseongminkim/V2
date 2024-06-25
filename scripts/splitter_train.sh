@@ -28,6 +28,6 @@ python NeuralSplitter/train.py \
     --num_layer 2 \
     --batch_size 512 \
     --use_attn \
-    --gpu_idx 2 \
+    --gpu_idx 3 \
     --rnn_cell gru \
     #--set_transformer \

@@ -8,8 +8,9 @@ import string
 import configparser
 import re2 as re
 import random
+import os
 
-from preprocess_regex import preprocess_regex
+from preprocess_regex import preprocess_regex, set_seed
 
 parser = argparse.ArgumentParser()
 parser.add_argument("data_name")
@@ -194,9 +195,9 @@ def main():
     config.read("config.ini", encoding="utf-8")
 
     random.seed(int(config["seed"]["practical_data"]))
-
-    xeger = Xeger(limit=5)
-    xeger.seed(int(config["seed"]["practical_data"]))
+    xeger = Xeger(limit=5, seed=int(config["seed"]["practical_data"]))
+    os.environ["pythonhashseed"] = config["seed"]["practical_data"]
+    set_seed(int(config["seed"]["practical_data"]))
 
     data_name = opt.data_name
 
@@ -206,12 +207,9 @@ def main():
     writer = csv.writer(save_file)
     regex_list = [x.strip() for x in regex_file.readlines()]
     error_idx = []
-    unique_regex_idx = set()
+    generatable_regex_idx = set()
+    unique_regex = set()
     max_len = -float("inf")
-
-    save_file = open(f"preprocessed_regex/{data_name}.csv", "w")
-    writer = csv.writer(save_file)
-    regex_set = set()
 
     for idx, regex in enumerate(regex_list):
         # Pre-preprocess
@@ -225,10 +223,7 @@ def main():
             regex = regex[1 : regex.rfind("/")]
         try:
             ast = sre_parse.parse(regex)
-            generatable = [False, 1]
-            regex, generatable = preprocess_regex(ast, is_root=True, generatable=generatable)
-            if generatable:
-                regex_set.add(regex)
+            regex = preprocess_regex(ast, is_root=True)
         except AssertionError as e:
             error_idx.append(idx)
             continue
@@ -236,8 +231,6 @@ def main():
         except Exception as e:
             error_idx.append(idx)
             continue
-
-        continue
 
         try:
             for _ in range(AUGMENTATION_RATIO):
@@ -255,8 +248,10 @@ def main():
                 labelled_pos = label
 
                 writer.writerow([train_pos, valid_pos, train_neg, valid_neg, labelled_pos, subregex_list])
-                unique_regex_idx.add(idx)
                 set2regex_goal = "".join(subregex_list)
+                generatable_regex_idx.add(idx)
+                unique_regex.add(set2regex_goal)
+
                 max_len = max(max_len, len(set2regex_goal))
 
         except PredictableException:
@@ -265,18 +260,14 @@ def main():
         except Exception as e:
             error_idx.append(idx)
             continue
-    # print(regex_set)
-    for regex in regex_set:
-        save_file.write(regex + "\n")
-    # save_file.writelines(regex_set)
-    exit()
 
     save_file.close()
     log = {
         "data_name": data_name,
         "error count": len(error_idx),
         "total regex": len(regex_list),
-        "unique regex": len(unique_regex_idx),
+        "generatable regex": len(generatable_regex_idx),
+        "unique regex": len(unique_regex),
         "max regex len": max_len,
     }
     print(log)

@@ -2,9 +2,9 @@
 
 # $1: [practical | random | debug]
 
-practical_train="./data/practical_data/integrated/train.csv"
-practical_valid="./data/practical_data/integrated/valid.csv"
-debug="./data/practical_data/integrated/test_snort.csv"
+practical_train="./data/practical_data/set2regex/train.csv"
+practical_valid="./data/practical_data/set2regex/valid.csv"
+debug="./data/practical_data/set2regex/valid.csv"
 
 if [ $1 == "practical" ]; then
     train_file_path=$practical_train
@@ -26,7 +26,7 @@ python set2regex/train.py \
     --expt_dir $expt_dir \
     --hidden_size 256 \
     --num_layer 2 \
-    --batch_size 512 \
+    --batch_size 256 \
     --gpu_idx 3 \
     --rnn_cell lstm \
     --attn_mode \

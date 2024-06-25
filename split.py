@@ -59,11 +59,11 @@ decoder = DecoderRNN(
     attn_mode=True,
 )
 
-random_pt = Checkpoint.load(Checkpoint.get_latest_checkpoint("./saved_models/set2regex/random/lstm_256_2_True"))
-random_set2regex = Seq2seq(random_encoder, decoder)
-random_set2regex = random_set2regex.cuda()
-random_set2regex.load_state_dict(random_pt)
-random_set2regex.eval()
+# random_pt = Checkpoint.load(Checkpoint.get_latest_checkpoint("./saved_models/set2regex/random/lstm_256_2_True"))
+# random_set2regex = Seq2seq(random_encoder, decoder)
+# random_set2regex = random_set2regex.cuda()
+# random_set2regex.load_state_dict(random_pt)
+# random_set2regex.eval()
 
 practical_pt = Checkpoint.load(Checkpoint.get_latest_checkpoint("./saved_models/set2regex/practical/lstm_256_2_True"))
 practical_set2regex = Seq2seq(practical_encoder, decoder)
@@ -150,7 +150,7 @@ def split(strings, label, no_split=False, need_bf_escape=False):
 
     split_size = torch.tensor(label)[torch.tensor(label) != vocab.stoi["<pad>"]].max().item()
     split_size = vocab.itos[split_size]
-    split_size = int(split_size, 16)
+    split_size = int(split_size, 32)
 
     if any(map(lambda x: is_last_sigma(x, split_size), tmp)):
         split_size += 1
@@ -169,7 +169,7 @@ def split(strings, label, no_split=False, need_bf_escape=False):
             # Not sigma
             if element != vocab.stoi["0"]:
                 element = vocab.itos[element]
-                element = int(element, 16)
+                element = int(element, 32)
                 if now != element:
                     for _ in range(element - len(sigma_lst2)):
                         sigma_lst2.append(False)
